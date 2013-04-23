@@ -1,0 +1,9 @@
+*.dSYM/
+*.a
+*.dylib
+*.o
+
+ndnfs
+
+.DS_Store
+
