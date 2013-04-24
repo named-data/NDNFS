@@ -11,8 +11,7 @@ def options(opt):
     # if Utils.unversioned_sys_platform () == "darwin":
     #     pass
 
-    opt.load('compiler_c compiler_cxx boost ccnx')
-    opt.load('mongodb', tooldir=['/Users/cawka/Devel/devel/waf/waflib/extras'])
+    opt.load('compiler_c compiler_cxx boost ccnx mongodb')
 
 def configure(conf):
     conf.load("compiler_c compiler_cxx")
