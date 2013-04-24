@@ -8,9 +8,14 @@
 #include <fuse.h>
 #include "mongo/client/dbclient.h"
 
+using namespace std;;
+using namespace mongo;;
+
 static const char  *file_path      = "/hello.txt";
 static const char   file_content[] = "Hello World!\n";
 static const size_t file_size      = sizeof(file_content)/sizeof(char) - 1;
+
+static DBClientConnection c;
 
 static int
 ndnfs_getattr(const char *path, struct stat *stbuf)
@@ -48,11 +53,17 @@ ndnfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 {
     if (strcmp(path, "/") != 0) /* We only recognize the root directory. */
         return -ENOENT;
+    
+    auto_ptr<DBClientCursor> cursor = c.query("test.ndnfs", QUERY("name" << "/"));
 
     filler(buf, ".", NULL, 0);           /* Current directory (.)  */
     filler(buf, "..", NULL, 0);          /* Parent directory (..)  */
-    filler(buf, file_path + 1, NULL, 0); /* The only file we have. */
-
+    while (cursor->more()) {
+        BSONObj p = cursor->next();
+        BSONElement dir = p["subdir"];
+        BSONObj dir_obj = dir.Obj();
+        filler(buf, dir_obj.getStringField("name"), NULL, 0);
+    }
     return 0;
 }
 
@@ -83,16 +94,21 @@ create_fuse_operations(struct fuse_operations *fuse_op)
     fuse_op->readdir = ndnfs_readdir; /* To provide directory listing.      */
 }
 
+
 int
 main(int argc, char **argv)
 {
     try {
-        mongo::DBClientConnection c;
         c.connect("localhost");
         std::cout << "connected ok" << std::endl;
     } catch( const mongo::DBException &e ) {
         std::cout << "caught " << e.what() << std::endl;
+        return -1;
     }
+    
+    BSONObj file_mapping = BSON( "name" << "hello.txt" << "content" << "Hello World!\n");
+    BSONObj root_dir = BSON( "name" << "/" << "subdir" << file_mapping);
+    c.insert("test.ndnfs", root_dir);
     
     struct fuse_operations ndnfs_fs_ops;
     create_fuse_operations(&ndnfs_fs_ops);

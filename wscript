@@ -70,9 +70,9 @@ def configure(conf):
 def build (bld):
     bld (
         target = "fuse-ndnfs",
-        features = ["cxx"],
+        features = ["cxx", "cxxprogram"],
         source = bld.path.ant_glob(['**/*.cc']),
-        use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD MONGODB',
+        use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD FUSE CCNX SSL MONGODB',
         includes = ".",
         )
 
