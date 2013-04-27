@@ -1,6 +1,6 @@
 # -*- Mode: python; py-indent-offset: 4; indent-tabs-mode: nil; coding: utf-8; -*-
 VERSION='0.1'
-APPNAME='fuse-ndnfs'
+APPNAME='NDNFS'
 
 from waflib import Build, Logs, Utils, Task, TaskGen, Configure
 
@@ -69,7 +69,7 @@ def configure(conf):
 
 def build (bld):
     bld (
-        target = "fuse-ndnfs",
+        target = "ndnfs",
         features = ["cxx", "cxxprogram"],
         source = bld.path.ant_glob(['**/*.cc']),
         use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD FUSE CCNX SSL MONGODB',
