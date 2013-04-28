@@ -23,6 +23,24 @@ static const int file_type = 1;
 static const int version_type = 2;
 static const int segment_type = 3;
 
+
+static int
+split_last_component(const char *path, string &prefix, string &name)
+{
+    string abs_path(path);
+    size_t last_comp_pos = abs_path.rfind('/');
+    if (last_comp_pos == string::npos)
+        return -1;
+    
+    prefix = abs_path.substr(0, last_comp_pos);
+    if (prefix.empty())
+        prefix = "/";
+    name = abs_path.substr(last_comp_pos + 1);
+    
+    return 0;
+}
+
+
 static int
 ndnfs_getattr(const char *path, struct stat *stbuf)
 {
@@ -157,15 +175,13 @@ ndnfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
     cout << "ndnfs_create: called with path " << path << endl;
     cout << "ndnfs_create: create file with flag " << fi->flags << " and mode " << mode << endl;
     
-    string abs_path(path);
-    size_t last_comp_pos = abs_path.rfind('/');
-    string dir_path = abs_path.substr(0, last_comp_pos + 1);
-    string file_name = abs_path.substr(last_comp_pos + 1);
+    string dir_path, file_name;
+    split_last_component(path, dir_path, file_name);
     
     ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
-    // Cannot create file that has conflicting file name
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
-    if (!cursor->more()) {
+    if (cursor->more()) {
+        // Cannot create file that has conflicting file name
         c->done();
         delete c;
         return -EEXIST;
@@ -183,10 +199,51 @@ ndnfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
     
     // Add new file entry with empty content
     BSONObj file_entry = BSONObjBuilder().append("_id", path).append("type", file_type).append("mode", 0666)
-                            .append("data", "").append("size", 0).obj();
+    .append("data", "").append("size", 0).obj();
     c->conn().insert(db_name, file_entry);
     // Append to existing BSON array
     c->conn().update(db_name, BSON("_id" << dir_path), BSON( "$push" << BSON( "data" << file_name ) ));
+    
+    c->done();
+    delete c;
+    return 0;
+}
+
+
+static int
+ndnfs_mkdir(const char *path, mode_t mode)
+{
+    cout << "ndnfs_mkdir: called with path " << path << endl;
+    cout << "ndnfs_mkdir: create file with mode " << mode << endl;
+    
+    string dir_path, dir_name;
+    split_last_component(path, dir_path, dir_name);
+    
+    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
+    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
+    if (cursor->more()) {
+        // Cannot create file that has conflicting file name
+        c->done();
+        delete c;
+        return -EEXIST;
+    }
+    
+    // Cannot create file without creating necessary folders
+    cursor = c->conn().query(db_name, QUERY("_id" << dir_path));
+    if (!cursor->more()) {
+        c->done();
+        delete c;
+        return -ENOENT;
+    }
+    
+    BSONObj entry = cursor->next();
+    
+    // Add new file entry with empty content
+    BSONObj dir_entry = BSONObjBuilder().append("_id", path).append("type", dir_type).append("mode", 0777)
+                            .append("data", BSONArrayBuilder().arr()).obj();
+    c->conn().insert(db_name, dir_entry);
+    // Append to existing BSON array
+    c->conn().update(db_name, BSON("_id" << dir_path), BSON( "$push" << BSON( "data" << dir_name ) ));
     
     c->done();
     delete c;
@@ -227,6 +284,100 @@ ndnfs_write(const char *path, const char *buf, size_t size, off_t offset, struct
     return size;  // return the number of tyes written on success
 }
 
+static int
+ndnfs_unlink(const char *path)
+{
+    cout << "ndnfs_unlink: called with path " << path << endl;
+    
+    string dir_path, file_name;
+    split_last_component(path, dir_path, file_name);
+    
+    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
+    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
+    if (!cursor->more()) {
+        // Cannot remove non-existing data
+        c->done();
+        delete c;
+        return -EEXIST;
+    }
+    
+    // Remove file entry
+    c->conn().remove(db_name, QUERY("_id" << path));
+    
+    // Remove pointer in the folder that holds the file
+    // XXX: low performance!!!
+    cursor = c->conn().query(db_name, QUERY("_id" << dir_path));
+    if (!cursor->more()) {
+        c->done();
+        delete c;
+        return -EEXIST;
+    }
+    
+    BSONObj entry = cursor->next();
+    vector< BSONElement > data = entry["data"].Array();
+    
+    BSONArrayBuilder bab;
+    for (int i = 0; i < data.size(); i++) {
+        string s = data[i].String();
+        if (s != file_name) {
+            bab.append(s);
+        }
+    }
+    
+    c->conn().update(db_name, BSON("_id" << dir_path), BSON( "$set" << BSON( "data" << bab.arr() ) ));
+    
+    c->done();
+    delete c;
+    return 0;
+}
+
+static int
+ndnfs_rmdir(const char *path)
+{
+    cout << "ndnfs_rmdir: called with path " << path << endl;
+    
+    string dir_path, dir_name;
+    split_last_component(path, dir_path, dir_name);
+    
+    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
+    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
+    if (!cursor->more()) {
+        // Cannot remove non-existing data
+        c->done();
+        delete c;
+        return -EEXIST;
+    }
+    
+    // Remove file entry
+    c->conn().remove(db_name, QUERY("_id" << path));
+    
+    // Remove pointer in the folder that holds the file
+    // XXX: low performance!!!
+    cursor = c->conn().query(db_name, QUERY("_id" << dir_path));
+    if (!cursor->more()) {
+        c->done();
+        delete c;
+        return -EEXIST;
+    }
+    
+    BSONObj entry = cursor->next();
+    vector< BSONElement > data = entry["data"].Array();
+    
+    BSONArrayBuilder bab;
+    for (int i = 0; i < data.size(); i++) {
+        string s = data[i].String();
+        if (s != dir_name) {
+            bab.append(s);
+        }
+    }
+    
+    c->conn().update(db_name, BSON("_id" << dir_path), BSON( "$set" << BSON( "data" << bab.arr() ) ));
+    
+    c->done();
+    delete c;
+    return 0;
+}
+
 
 static void
 create_fuse_operations(struct fuse_operations *fuse_op)
@@ -235,8 +386,12 @@ create_fuse_operations(struct fuse_operations *fuse_op)
     fuse_op->open    = ndnfs_open;
     fuse_op->read    = ndnfs_read;
     fuse_op->readdir = ndnfs_readdir;
-    //fuse_op->create  = ndnfs_create;
+    fuse_op->create  = ndnfs_create;
     fuse_op->write   = ndnfs_write;
+    fuse_op->unlink  = ndnfs_unlink;
+    fuse_op->mkdir   = ndnfs_mkdir;
+    //fuse_op->rmdir   = ndnfs_unlink;
+    fuse_op->rmdir   = ndnfs_rmdir;
 }
 
 struct fuse_operations ndnfs_fs_ops;
@@ -257,6 +412,7 @@ main(int argc, char **argv)
         return -1;
     }
     
+    cout << "main: mount root directory..." << endl;
     // Check database first
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << "/"));
     if (!cursor->more()) {
@@ -276,14 +432,15 @@ main(int argc, char **argv)
                             .append("data", BSONArrayBuilder().arr()).obj();
         c->conn().insert(db_name, hello_dir);
         c->conn().update(db_name, BSON( "_id" << "/" ), BSON( "$push" << BSON( "data" << "hello" ) ) );
+        /* End of test */
     }
-    cout << "main: Root directory mounted from database" << endl;
+    cout << "main: ok" << endl;
     
     c->done();
     delete c;
     
     create_fuse_operations(&ndnfs_fs_ops);
     
-    cout << "main: Enter FUSE main loop" << endl;
+    cout << "main: enter FUSE main loop" << endl;
     return fuse_main(argc, argv, &ndnfs_fs_ops, NULL);
 }
