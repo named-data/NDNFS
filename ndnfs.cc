@@ -16,7 +16,6 @@ using namespace mongo;
 using namespace boost;
 
 
-static DBClientConnection c;
 static const char *db_name = "ndnfs.root";
 
 static const int dir_type = 0;
@@ -31,9 +30,13 @@ ndnfs_getattr(const char *path, struct stat *stbuf)
     
     memset(stbuf, 0, sizeof(struct stat));
 
-    auto_ptr<DBClientCursor> cursor = c.query(db_name, QUERY("_id" << path));
-    if (!cursor->more())
+    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
+    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
+    if (!cursor->more()) {
+        c->done();
+        delete c;
         return -ENOENT;
+    }
     
     BSONObj entry = cursor->next();  // There should be no two entries with the same id (absolute path)
     int type = entry.getIntField("type");
@@ -48,7 +51,9 @@ ndnfs_getattr(const char *path, struct stat *stbuf)
         int file_size = entry.getIntField("size");
         stbuf->st_size = file_size;
     }
-
+    
+    c->done();
+    delete c;
     return 0;
 }
 
@@ -58,15 +63,22 @@ ndnfs_open(const char *path, struct fuse_file_info *fi)
     cout << "ndnfs_open: called with path " << path << endl;
     cout << "ndnfs_open: flag is " << fi->flags << endl;
     
-    auto_ptr<DBClientCursor> cursor = c.query(db_name, QUERY("_id" << path));
-    if (!cursor->more())
+    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
+    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
+    if (!cursor->more()) {
+        c->done();
+        delete c;
         return -ENOENT;
+    }
 
-    //BSONObj entry = cursor->next();
     //TODO: check mode
+    
+    //BSONObj entry = cursor->next();
     //if ((fi->flags & O_ACCMODE) != O_RDONLY)
     //    return -EACCES;
 
+    c->done();
+    delete c;
     return 0;
 }
 
@@ -76,14 +88,21 @@ ndnfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 {
     cout << "ndnfs_readdir: called with path " << path << endl;
     
-    auto_ptr<DBClientCursor> cursor = c.query(db_name, QUERY("_id" << path));
-    if (!cursor->more())
+    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
+    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
+    if (!cursor->more()) {
+        c->done();
+        delete c;
         return -ENOENT;
+    }
     
     BSONObj entry = cursor->next();
     int type = entry.getIntField("type");
-    if (type != dir_type)
+    if (type != dir_type) {
+        c->done();
+        delete c;
         return -ENOENT;
+    }
     
     vector< BSONElement > data = entry["data"].Array();
 
@@ -92,6 +111,9 @@ ndnfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     for (int i = 0; i < data.size(); i++) {
         filler(buf, data[i].String().c_str(), NULL, 0);
     }
+    
+    c->done();
+    delete c;
     return 0;
 }
 
@@ -101,15 +123,22 @@ ndnfs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_f
     cout << "ndnfs_read: called with path " << path << endl;
     cout << "ndnfs_read: start read at offset " << offset << " with size " << size << endl;
 
-    auto_ptr<DBClientCursor> cursor = c.query(db_name, QUERY("_id" << path));
-    if (!cursor->more())
+    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
+    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
+    if (!cursor->more()) {
+        c->done();
+        delete c;
         return -ENOENT;
+    }
     
     BSONObj entry = cursor->next();
     int file_size = entry.getIntField("size");
 
-    if ((size_t)offset >= file_size) /* Trying to read past the end of file. */
+    if ((size_t)offset >= file_size) {/* Trying to read past the end of file. */
+        c->done();
+        delete c;
         return 0;
+    }
 
     if (offset + size > file_size) /* Trim the read to the file size. */
         size = file_size - offset;
@@ -117,6 +146,8 @@ ndnfs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_f
     string content = entry.getStringField("data");
     memcpy(buf, content.substr(offset, size).c_str(), size); /* Provide the content. */
 
+    c->done();
+    delete c;
     return size;
 }
 
@@ -124,32 +155,41 @@ static int
 ndnfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 {
     cout << "ndnfs_create: called with path " << path << endl;
+    cout << "ndnfs_create: create file with flag " << fi->flags << " and mode " << mode << endl;
     
     string abs_path(path);
     size_t last_comp_pos = abs_path.rfind('/');
     string dir_path = abs_path.substr(0, last_comp_pos + 1);
     string file_name = abs_path.substr(last_comp_pos + 1);
-    cout << dir_path << " " << file_name << endl;
     
+    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
     // Cannot create file that has conflicting file name
-    auto_ptr<DBClientCursor> cursor = c.query(db_name, QUERY("_id" << path));
-    if (!cursor->more())
+    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
+    if (!cursor->more()) {
+        c->done();
+        delete c;
         return -EEXIST;
+    }
     
     // Cannot create file without creating necessary folders
-    cursor = c.query(db_name, QUERY("_id" << dir_path));
-    if (!cursor->more())
+    cursor = c->conn().query(db_name, QUERY("_id" << dir_path));
+    if (!cursor->more()) {
+        c->done();
+        delete c;
         return -ENOENT;
+    }
     
     BSONObj entry = cursor->next();
     
     // Add new file entry with empty content
-    BSONObj file_entry = BSONObjBuilder().append("_id", path).append("type", file_type).append("mode", mode)
+    BSONObj file_entry = BSONObjBuilder().append("_id", path).append("type", file_type).append("mode", 0666)
                             .append("data", "").append("size", 0).obj();
-    c.insert(db_name, file_entry);
+    c->conn().insert(db_name, file_entry);
     // Append to existing BSON array
-    c.update(db_name, BSON("_id" << dir_path), BSON( "$push" << BSON( "data" << file_name ) ));
+    c->conn().update(db_name, BSON("_id" << dir_path), BSON( "$push" << BSON( "data" << file_name ) ));
     
+    c->done();
+    delete c;
     return 0;
 }
 
@@ -158,16 +198,33 @@ ndnfs_write(const char *path, const char *buf, size_t size, off_t offset, struct
 {
     cout << "ndnfs_write: called with path " << path << endl;
     cout << "ndnfs_write: start write at offset " << offset << " with size " << size << endl;
-    /*
-    auto_ptr<DBClientCursor> cursor = c.query(db_name, QUERY("_id" << "/"));
+    
+    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
+    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
     if (!cursor->more()) {
-        string file_name(path);
-        BSONObj file_entry = BSONObjBuilder().append("name", file_name.substr(1).c_str()).append("type", "file").append("data", buf, size).obj();
-        BSONObj dir_entry = BSON( "name" << "/" << "type" << "dir" << "data" << file_entry);
-        c.insert(db_name, dir_entry);
+        c->done();
+        delete c;
+        return -EINVAL;
     }
-    */
-    return 0;
+    
+    BSONObj entry = cursor->next();
+    if (entry.getIntField("type") != file_type) {
+        c->done();
+        delete c;
+        return -EINVAL;
+    }
+    
+    string old_content = entry.getStringField("data");
+    string buf_content(buf, size);
+    
+    string content = old_content.substr(0, offset) + buf_content;
+    
+    c->conn().update(db_name, BSON("_id" << path), BSON( "$set" << BSON( "data" << content ) ));
+    c->conn().update(db_name, BSON("_id" << path), BSON( "$set" << BSON( "size" << (int)content.size() ) ));
+    
+    c->done();
+    delete c;
+    return size;  // return the number of tyes written on success
 }
 
 
@@ -179,7 +236,7 @@ create_fuse_operations(struct fuse_operations *fuse_op)
     fuse_op->read    = ndnfs_read;
     fuse_op->readdir = ndnfs_readdir;
     //fuse_op->create  = ndnfs_create;
-    //fuse_op->write   = ndnfs_write;
+    fuse_op->write   = ndnfs_write;
 }
 
 struct fuse_operations ndnfs_fs_ops;
@@ -187,38 +244,46 @@ struct fuse_operations ndnfs_fs_ops;
 int
 main(int argc, char **argv)
 {
-    try {
-        c.connect("localhost");
-        cout << "connected ok" << endl;
-    } catch( const DBException &e ) {
-        cout << "caught " << e.what() << endl;
+    cout << "main: NDNFS version beta 0.1" << endl;
+    cout << "main: test mongodb connection..." << endl;
+    
+    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
+    if (c->ok()) {
+        cout << "main: ok" << endl;
+    } else {
+        cout << "main: cannot connect to local mongodb, quit..." << endl;
+        c->done();
+        delete c;
         return -1;
     }
     
     // Check database first
-    auto_ptr<DBClientCursor> cursor = c.query(db_name, QUERY("_id" << "/"));
+    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << "/"));
     if (!cursor->more()) {
         // Create root directory as an empty folder if database is empty
         BSONObj root_dir = BSONObjBuilder().append("_id", "/").append("type", dir_type).append("mode", 0777)
                             .append("data", BSONArrayBuilder().arr()).obj();
-        c.insert(db_name, root_dir);
+        c->conn().insert(db_name, root_dir);
         
         /* For test use, should remove later */
         // Add a file
         BSONObj hello_file = BSONObjBuilder().append("_id", "/hello.txt").append("type", file_type).append("mode", 0666)
                             .append("data", "Hello World\n").append("size", 12).obj();
-        c.insert(db_name, hello_file);
-        c.update(db_name, BSON( "_id" << "/" ), BSON( "$push" << BSON( "data" << "hello.txt" ) ) );
+        c->conn().insert(db_name, hello_file);
+        c->conn().update(db_name, BSON( "_id" << "/" ), BSON( "$push" << BSON( "data" << "hello.txt" ) ) );
         // Add a folder
         BSONObj hello_dir = BSONObjBuilder().append("_id", "/hello").append("type", dir_type).append("mode", 0777)
                             .append("data", BSONArrayBuilder().arr()).obj();
-        c.insert(db_name, hello_dir);
-        c.update(db_name, BSON( "_id" << "/" ), BSON( "$push" << BSON( "data" << "hello" ) ) );
+        c->conn().insert(db_name, hello_dir);
+        c->conn().update(db_name, BSON( "_id" << "/" ), BSON( "$push" << BSON( "data" << "hello" ) ) );
     }
-    cout << "Root directory mounted from database" << endl;
+    cout << "main: Root directory mounted from database" << endl;
+    
+    c->done();
+    delete c;
     
     create_fuse_operations(&ndnfs_fs_ops);
     
-    cout << "Enter FUSE main loop" << endl;
+    cout << "main: Enter FUSE main loop" << endl;
     return fuse_main(argc, argv, &ndnfs_fs_ops, NULL);
 }
