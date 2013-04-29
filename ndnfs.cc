@@ -12,8 +12,8 @@
 #include "mongo/client/dbclient.h"
 
 using namespace std;
-using namespace mongo;
 using namespace boost;
+using namespace mongo;
 
 
 static const char *db_name = "ndnfs.root";
@@ -66,7 +66,13 @@ ndnfs_getattr(const char *path, struct stat *stbuf)
     } else if (type == file_type) {
         stbuf->st_mode = S_IFREG | mode;
         stbuf->st_nlink = 1;
-        int file_size = entry.getIntField("size");
+        int file_size;
+        entry.getField("data").binData(file_size);
+        
+        // Note: Even if data size is 0, the returned pointer is still not NULL.
+        //const char *content = entry.getField("data").binData(file_size);
+        //printf("%d %p\n", file_size, content);
+        
         stbuf->st_size = file_size;
     }
     
@@ -150,7 +156,8 @@ ndnfs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_f
     }
     
     BSONObj entry = cursor->next();
-    int file_size = entry.getIntField("size");
+    int file_size;
+    const char *content = entry.getField("data").binData(file_size);
 
     if ((size_t)offset >= file_size) {/* Trying to read past the end of file. */
         c->done();
@@ -161,9 +168,9 @@ ndnfs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_f
     if (offset + size > file_size) /* Trim the read to the file size. */
         size = file_size - offset;
 
-    string content = entry.getStringField("data");
-    memcpy(buf, content.substr(offset, size).c_str(), size); /* Provide the content. */
-
+    if (file_size > 0)
+        memcpy(buf, content + offset, size);
+    
     c->done();
     delete c;
     return size;
@@ -197,9 +204,9 @@ ndnfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
     
     BSONObj entry = cursor->next();
     
-    // Add new file entry with empty content
+    // Add new file entry with empty content, "data" field is not set
     BSONObj file_entry = BSONObjBuilder().append("_id", path).append("type", file_type).append("mode", 0666)
-    .append("data", "").append("size", 0).obj();
+                        .appendBinData("data", 0, BinDataGeneral, NULL).obj();
     c->conn().insert(db_name, file_entry);
     // Append to existing BSON array
     c->conn().update(db_name, BSON("_id" << dir_path), BSON( "$push" << BSON( "data" << file_name ) ));
@@ -271,13 +278,27 @@ ndnfs_write(const char *path, const char *buf, size_t size, off_t offset, struct
         return -EINVAL;
     }
     
-    string old_content = entry.getStringField("data");
-    string buf_content(buf, size);
+    int file_size;
+    const char *old_content = entry.getField("data").binData(file_size);
+    if (file_size < offset) {
+        c->done();
+        delete c;
+        return -EINVAL;
+    }
     
-    string content = old_content.substr(0, offset) + buf_content;
+    char *content = new char[offset + size];
     
-    c->conn().update(db_name, BSON("_id" << path), BSON( "$set" << BSON( "data" << content ) ));
-    c->conn().update(db_name, BSON("_id" << path), BSON( "$set" << BSON( "size" << (int)content.size() ) ));
+    if (file_size > 0)
+        memcpy(content, old_content, offset);
+    
+    memcpy(content + offset, buf, size);
+    
+    BSONObj data_obj = BSONObjBuilder().appendBinData("data", offset + size, BinDataGeneral, content).obj();
+    
+    c->conn().update(db_name, BSON("_id" << path), BSON( "$set" << data_obj ));
+    c->conn().update(db_name, BSON("_id" << path), BSON( "$set" << BSON( "size" << (int)(offset + size) ) ));
+    
+    delete content;
     
     c->done();
     delete c;
@@ -413,6 +434,10 @@ main(int argc, char **argv)
     }
     
     cout << "main: mount root directory..." << endl;
+    // For test purpose, clear database first
+    c->conn().dropCollection(db_name);
+    c->conn().createCollection(db_name);
+    
     // Check database first
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << "/"));
     if (!cursor->more()) {
@@ -423,10 +448,16 @@ main(int argc, char **argv)
         
         /* For test use, should remove later */
         // Add a file
+        const char *hello = "Hello World!\n";
         BSONObj hello_file = BSONObjBuilder().append("_id", "/hello.txt").append("type", file_type).append("mode", 0666)
-                            .append("data", "Hello World\n").append("size", 12).obj();
+                            .appendBinData("data", 13, BinDataGeneral, hello).obj();
         c->conn().insert(db_name, hello_file);
         c->conn().update(db_name, BSON( "_id" << "/" ), BSON( "$push" << BSON( "data" << "hello.txt" ) ) );
+        // Add an empty file
+        BSONObj empty_file = BSONObjBuilder().append("_id", "/empty.txt").append("type", file_type).append("mode", 0666)
+                            .appendBinData("data", 0, BinDataGeneral, NULL).obj();
+        c->conn().insert(db_name, empty_file);
+        c->conn().update(db_name, BSON( "_id" << "/" ), BSON( "$push" << BSON( "data" << "empty.txt" ) ) );
         // Add a folder
         BSONObj hello_dir = BSONObjBuilder().append("_id", "/hello").append("type", dir_type).append("mode", 0777)
                             .append("data", BSONArrayBuilder().arr()).obj();
