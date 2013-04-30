@@ -53,6 +53,7 @@ def configure(conf):
         conf.fatal ("Cannot find SSL libraries")
 
     conf.load ('ccnx')
+    conf.check_cfg(package='libccnx-cpp', args=['--cflags', '--libs'], uselib_store='CCNXCPP', mandatory=True)
 
     conf.load('boost')
     conf.check_boost(lib='system test iostreams filesystem thread')
@@ -72,7 +73,7 @@ def build (bld):
         target = "ndnfs",
         features = ["cxx", "cxxprogram"],
         source = bld.path.ant_glob(['**/*.cc']),
-        use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD FUSE CCNX SSL MONGODB',
+        use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD FUSE CCNX SSL MONGODB CCNXCPP',
         includes = ".",
         )
 
