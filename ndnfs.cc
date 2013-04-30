@@ -9,13 +9,14 @@
 #include <boost/algorithm/string.hpp>
 
 #include <fuse.h>
-#include "mongo/client/dbclient.h"
+#include <mongo/client/dbclient.h>
+#include <ccnx-cpp.h>
 
 using namespace std;
 using namespace boost;
 using namespace mongo;
 
-
+static Ccnx::Wrapper ndn_wrapper;
 static const char *db_name = "ndnfs.root";
 
 static const int dir_type = 0;
@@ -24,7 +25,7 @@ static const int version_type = 2;
 static const int segment_type = 3;
 
 
-static int
+static inline int
 split_last_component(const char *path, string &prefix, string &name)
 {
     string abs_path(path);
@@ -66,14 +67,7 @@ ndnfs_getattr(const char *path, struct stat *stbuf)
     } else if (type == file_type) {
         stbuf->st_mode = S_IFREG | mode;
         stbuf->st_nlink = 1;
-        int file_size;
-        entry.getField("data").binData(file_size);
-        
-        // Note: Even if data size is 0, the returned pointer is still not NULL.
-        //const char *content = entry.getField("data").binData(file_size);
-        //printf("%d %p\n", file_size, content);
-        
-        stbuf->st_size = file_size;
+        stbuf->st_size = entry.getIntField("size");
     }
     
     c->done();
@@ -156,8 +150,26 @@ ndnfs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_f
     }
     
     BSONObj entry = cursor->next();
-    int file_size;
-    const char *content = entry.getField("data").binData(file_size);
+    if (entry.getIntField("type") != file_type) {
+        c->done();
+        delete c;
+        return -EINVAL;
+    }
+    
+    if (entry.getIntField("size") == 0) {
+        c->done();
+        delete c;
+        return 0;
+    }
+    
+    int co_size;
+    const char *co_raw = entry.getField("data").binData(co_size);
+    Ccnx::ParsedContentObject pco((const unsigned char *)co_raw, co_size);
+    Ccnx::BytesPtr co_content = pco.contentPtr();
+    
+    int file_size = entry.getIntField("size");
+    assert(co_content->size() == file_size);
+    const char *content = (const char *)Ccnx::head(*co_content);
 
     if ((size_t)offset >= file_size) {/* Trying to read past the end of file. */
         c->done();
@@ -206,7 +218,7 @@ ndnfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
     
     // Add new file entry with empty content, "data" field is not set
     BSONObj file_entry = BSONObjBuilder().append("_id", path).append("type", file_type).append("mode", 0666)
-                        .appendBinData("data", 0, BinDataGeneral, NULL).obj();
+                        .appendBinData("data", 0, BinDataGeneral, NULL).append("size", 0).obj();
     c->conn().insert(db_name, file_entry);
     // Append to existing BSON array
     c->conn().update(db_name, BSON("_id" << dir_path), BSON( "$push" << BSON( "data" << file_name ) ));
@@ -278,25 +290,43 @@ ndnfs_write(const char *path, const char *buf, size_t size, off_t offset, struct
         return -EINVAL;
     }
     
-    int file_size;
-    const char *old_content = entry.getField("data").binData(file_size);
-    if (file_size < offset) {
-        c->done();
-        delete c;
-        return -EINVAL;
+    int old_co_size;
+    const char *old_co_raw = entry.getField("data").binData(old_co_size);
+    
+    int old_file_size = 0;
+    const char *old_content = NULL;
+    if (old_co_size > 0) {
+        Ccnx::ParsedContentObject pco((const unsigned char *)old_co_raw, old_co_size);
+        Ccnx::BytesPtr old_co_content = pco.contentPtr();
+    
+        old_file_size = entry.getIntField("size");
+        assert(old_co_content->size() == old_file_size);
+        old_content = (const char *)Ccnx::head(*old_co_content);
+        
+        if (old_file_size < offset) {
+            c->done();
+            delete c;
+            return -EINVAL;
+        }
     }
     
-    char *content = new char[offset + size];
+    int file_size = offset + size;
+    char *content = new char[file_size];
     
-    if (file_size > 0)
+    if (old_file_size > 0 && offset > 0)
         memcpy(content, old_content, offset);
     
     memcpy(content + offset, buf, size);
     
-    BSONObj data_obj = BSONObjBuilder().appendBinData("data", offset + size, BinDataGeneral, content).obj();
+    Ccnx::Bytes co = ndn_wrapper.createContentObject(Ccnx::Name (path),
+                                                           content,
+                                                           file_size);
+    unsigned char *co_raw = Ccnx::head(co);
+    int co_size = co.size();
+    BSONObj data_obj = BSONObjBuilder().appendBinData("data", co_size, BinDataGeneral, co_raw).obj();
     
     c->conn().update(db_name, BSON("_id" << path), BSON( "$set" << data_obj ));
-    c->conn().update(db_name, BSON("_id" << path), BSON( "$set" << BSON( "size" << (int)(offset + size) ) ));
+    c->conn().update(db_name, BSON("_id" << path), BSON( "$set" << BSON( "size" << (int)(file_size) ) ));
     
     delete content;
     
@@ -415,7 +445,7 @@ create_fuse_operations(struct fuse_operations *fuse_op)
     fuse_op->rmdir   = ndnfs_rmdir;
 }
 
-struct fuse_operations ndnfs_fs_ops;
+static struct fuse_operations ndnfs_fs_ops;
 
 int
 main(int argc, char **argv)
@@ -449,8 +479,13 @@ main(int argc, char **argv)
         /* For test use, should remove later */
         // Add a file
         const char *hello = "Hello World!\n";
+        Ccnx::Bytes hello_co = ndn_wrapper.createContentObject(Ccnx::Name ("/hello.txt"),
+                                                         hello,
+                                                         13);
+        unsigned char *co_raw = Ccnx::head(hello_co);
+        int co_len = hello_co.size();
         BSONObj hello_file = BSONObjBuilder().append("_id", "/hello.txt").append("type", file_type).append("mode", 0666)
-                            .appendBinData("data", 13, BinDataGeneral, hello).obj();
+                            .appendBinData("data", co_len, BinDataGeneral, co_raw).append("size", 13).obj();
         c->conn().insert(db_name, hello_file);
         c->conn().update(db_name, BSON( "_id" << "/" ), BSON( "$push" << BSON( "data" << "hello.txt" ) ) );
         // Add an empty file
@@ -463,6 +498,19 @@ main(int argc, char **argv)
                             .append("data", BSONArrayBuilder().arr()).obj();
         c->conn().insert(db_name, hello_dir);
         c->conn().update(db_name, BSON( "_id" << "/" ), BSON( "$push" << BSON( "data" << "hello" ) ) );
+        
+        /*
+        // Test parsing content object
+        auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << "/hello.txt"));
+        BSONObj entry = cursor->next();
+        int co_size;
+        const char *co = entry.getField("data").binData(co_size);
+        Ccnx::ParsedContentObject pco((const unsigned char *)co, co_size);
+        
+        Ccnx::BytesPtr content = pco.contentPtr();
+        cout << "parsed content is: " << Ccnx::head(*content) << endl;
+         */
+        
         /* End of test */
     }
     cout << "main: ok" << endl;
