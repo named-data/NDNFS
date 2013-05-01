@@ -3,6 +3,9 @@
 *.dylib
 *.o
 
+*.cc~
+*.h~
+
 ndnfs
 
 .DS_Store
