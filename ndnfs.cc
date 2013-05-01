@@ -74,7 +74,7 @@ int main(int argc, char **argv)
         c->conn().update(db_name, BSON( "_id" << "/" ), BSON( "$push" << BSON( "data" << "hello.txt" ) ) );
         // Add an empty file
         BSONObj empty_file = BSONObjBuilder().append("_id", "/empty.txt").append("type", file_type).append("mode", 0666)
-                            .appendBinData("data", 0, BinDataGeneral, NULL).obj();
+                            .appendBinData("data", 0, BinDataGeneral, NULL).append("size", 0).obj();
         c->conn().insert(db_name, empty_file);
         c->conn().update(db_name, BSON( "_id" << "/" ), BSON( "$push" << BSON( "data" << "empty.txt" ) ) );
         // Add a folder

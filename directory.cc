@@ -41,7 +41,7 @@ int ndnfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 int ndnfs_mkdir(const char *path, mode_t mode)
 {
     cout << "ndnfs_mkdir: called with path " << path << endl;
-    cout << "ndnfs_mkdir: create file with mode " << mode << endl;
+    cout << "ndnfs_mkdir: create dir with mode " << mode << endl;
     
     string dir_path, dir_name;
     split_last_component(path, dir_path, dir_name);
@@ -77,6 +77,12 @@ int ndnfs_mkdir(const char *path, mode_t mode)
     return 0;
 }
 
+
+/*
+ * For rmdir, we don't need to implement recursive remove,
+ * because 'rm -r' will iterate all the sub-entries (dirs or
+ * files) for us and remove them one-by-one.   ---SWT
+ */
 int ndnfs_rmdir(const char *path)
 {
     cout << "ndnfs_rmdir: called with path " << path << endl;
@@ -87,8 +93,8 @@ int ndnfs_rmdir(const char *path)
         return -EINVAL;
     }
     
-    string dir_path, dir_name;
-    split_last_component(path, dir_path, dir_name);
+    string parent_dir_path, dir_name;
+    split_last_component(path, parent_dir_path, dir_name);
     
     ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
@@ -99,30 +105,40 @@ int ndnfs_rmdir(const char *path)
         return -EEXIST;
     }
     
+    // Cannot create non-empty dir
+    BSONObj dir_entry = cursor->next();
+    assert(dir_entry.getIntField("type") == dir_type);
+    vector< BSONElement > dir_data = dir_entry["data"].Array();
+    if (dir_data.size() != 0) {
+        c->done();
+        delete c;
+        return -ENOTEMPTY;
+    }
+    
     // Remove dir entry
     c->conn().remove(db_name, QUERY("_id" << path));
     
-    // Remove pointer in the folder that holds the file
+    // Remove pointer in the parent folder
     // XXX: low performance!!!
-    cursor = c->conn().query(db_name, QUERY("_id" << dir_path));
+    cursor = c->conn().query(db_name, QUERY("_id" << parent_dir_path));
     if (!cursor->more()) {
         c->done();
         delete c;
         return -EEXIST;
     }
     
-    BSONObj entry = cursor->next();
-    vector< BSONElement > data = entry["data"].Array();
+    BSONObj parent_entry = cursor->next();
+    vector< BSONElement > parent_data = parent_entry["data"].Array();
     
     BSONArrayBuilder bab;
-    for (int i = 0; i < data.size(); i++) {
-        string s = data[i].String();
+    for (int i = 0; i < parent_data.size(); i++) {
+        string s = parent_data[i].String();
         if (s != dir_name) {
             bab.append(s);
         }
     }
     
-    c->conn().update(db_name, BSON("_id" << dir_path), BSON( "$set" << BSON( "data" << bab.arr() ) ));
+    c->conn().update(db_name, BSON("_id" << parent_dir_path), BSON( "$set" << BSON( "data" << bab.arr() ) ));
     
     c->done();
     delete c;

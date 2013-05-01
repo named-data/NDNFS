@@ -38,4 +38,18 @@ inline int split_last_component(const char *path, std::string &prefix, std::stri
     return 0;
 }
 
+inline int split_last_component(const std::string& path, std::string &prefix, std::string &name)
+{
+    size_t last_comp_pos = path.rfind('/');
+    if (last_comp_pos == std::string::npos)
+        return -1;
+    
+    prefix = path.substr(0, last_comp_pos);
+    if (prefix.empty())
+        prefix = "/";
+    name = path.substr(last_comp_pos + 1);
+    
+    return 0;
+}
+
 #endif
