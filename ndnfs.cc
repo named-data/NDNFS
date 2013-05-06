@@ -7,7 +7,7 @@ using namespace std;
 using namespace boost;
 using namespace mongo;
 
-Ccnx::Wrapper ndn_wrapper;
+ndn::Wrapper ndn_wrapper;
 const char *db_name = "ndnfs.root";
 
 const int dir_type = 0;
@@ -16,8 +16,7 @@ const int version_type = 2;
 const int segment_type = 3;
 
 
-static void
-create_fuse_operations(struct fuse_operations *fuse_op)
+static void create_fuse_operations(struct fuse_operations *fuse_op)
 {
     fuse_op->getattr = ndnfs_getattr;
     fuse_op->open    = ndnfs_open;
@@ -63,10 +62,10 @@ int main(int argc, char **argv)
         /* For test use, should remove later */
         // Add a file
         const char *hello = "Hello World!\n";
-        Ccnx::Bytes hello_co = ndn_wrapper.createContentObject(Ccnx::Name ("/hello.txt"),
+        ndn::Bytes hello_co = ndn_wrapper.createContentObject(ndn::Name ("/hello.txt"),
                                                          hello,
                                                          13);
-        unsigned char *co_raw = Ccnx::head(hello_co);
+        unsigned char *co_raw = ndn::head(hello_co);
         int co_len = hello_co.size();
         BSONObj hello_file = BSONObjBuilder().append("_id", "/hello.txt").append("type", file_type).append("mode", 0666)
                             .appendBinData("data", co_len, BinDataGeneral, co_raw).append("size", 13).obj();

@@ -12,9 +12,9 @@
 
 #include <fuse.h>
 #include <mongo/client/dbclient.h>
-#include <ccnx-cpp.h>
+#include <ndn.cxx.h>
 
-extern Ccnx::Wrapper ndn_wrapper;
+extern ndn::Wrapper ndn_wrapper;
 extern const char *db_name;
 
 extern const int dir_type;

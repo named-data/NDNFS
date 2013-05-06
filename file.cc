@@ -56,12 +56,12 @@ int ndnfs_read(const char *path, char *buf, size_t size, off_t offset, struct fu
     
     int co_size;
     const char *co_raw = entry.getField("data").binData(co_size);
-    Ccnx::ParsedContentObject pco((const unsigned char *)co_raw, co_size);
-    Ccnx::BytesPtr co_content = pco.contentPtr();
+    ndn::ParsedContentObject pco((const unsigned char *)co_raw, co_size);
+    ndn::BytesPtr co_content = pco.contentPtr();
     
     int file_size = entry.getIntField("size");
     assert(co_content->size() == file_size);
-    const char *content = (const char *)Ccnx::head(*co_content);
+    const char *content = (const char *)ndn::head(*co_content);
 
     if ((size_t)offset >= file_size) {/* Trying to read past the end of file. */
         c->done();
@@ -145,12 +145,12 @@ int ndnfs_write(const char *path, const char *buf, size_t size, off_t offset, st
     int old_file_size = 0;
     const char *old_content = NULL;
     if (old_co_size > 0) {
-        Ccnx::ParsedContentObject pco((const unsigned char *)old_co_raw, old_co_size);
-        Ccnx::BytesPtr old_co_content = pco.contentPtr();
+        ndn::ParsedContentObject pco((const unsigned char *)old_co_raw, old_co_size);
+        ndn::BytesPtr old_co_content = pco.contentPtr();
     
         old_file_size = entry.getIntField("size");
         assert(old_co_content->size() == old_file_size);
-        old_content = (const char *)Ccnx::head(*old_co_content);
+        old_content = (const char *)ndn::head(*old_co_content);
         
         if (old_file_size < offset) {
             c->done();
@@ -167,10 +167,10 @@ int ndnfs_write(const char *path, const char *buf, size_t size, off_t offset, st
     
     memcpy(content + offset, buf, size);
     
-    Ccnx::Bytes co = ndn_wrapper.createContentObject(Ccnx::Name (path),
+    ndn::Bytes co = ndn_wrapper.createContentObject(ndn::Name (path),
                                                            content,
                                                            file_size);
-    unsigned char *co_raw = Ccnx::head(co);
+    unsigned char *co_raw = ndn::head(co);
     int co_size = co.size();
     BSONObj data_obj = BSONObjBuilder().appendBinData("data", co_size, BinDataGeneral, co_raw).obj();
     
