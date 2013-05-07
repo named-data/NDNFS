@@ -33,14 +33,13 @@ static inline uint64_t timestamp() {
     return tv.tv_sec * (uint64_t)1000000 + tv.tv_usec;
 }
 
-void create_version(const char *path, ScopedDbConnection *c)
+void create_version(const string &path, ScopedDbConnection *c)
 {
-    string file_path(path);
     uint64_t now = timestamp();
     string version = lexical_cast<string> (now);
     cout << "create_version: version " << version << " created for file " << path << endl;
 
-    string full_path = file_path + "/" + version;
+    string full_path = path + "/" + version;
     BSONObj ver_entry = BSONObjBuilder().append("_id", full_path).append("type", version_type).append("mode", 0666)
 	                .appendBinData("data", 0, BinDataGeneral, NULL).append("size", 0).obj();
 
@@ -57,16 +56,15 @@ void create_version(const char *path, ScopedDbConnection *c)
     return;
 }
 
-void add_version_with_data(const char *path, ScopedDbConnection *c, const char *file_data, int file_size)
+void add_version_with_data(const string &path, ScopedDbConnection *c, const char *file_data, int file_size)
 {
-    string file_path(path);
     ndn::Name file_name(path);
     uint64_t now = timestamp();
     string version = lexical_cast<string> (now);
     cout << "add_version_with_data: version " << version << " created for file " << path << endl;
 
     file_name.appendVersion(now);    
-    string full_path = file_path + "/" + version;
+    string full_path = path + "/" + version;
     ndn::Bytes co = ndn_wrapper.createContentObject(file_name, file_data, file_size);
     unsigned char *co_raw = ndn::head(co);
     int co_size = co.size();
@@ -88,11 +86,10 @@ static inline string get_latest_version_name(BSONObj &entry)
     return data[ data.size() - 1 ].String();
 }
 
-int get_latest_version_info(const char *path, ScopedDbConnection *c, BSONObj &entry, int &mode, int& size)
+int get_latest_version_info(const string &path, ScopedDbConnection *c, BSONObj &entry, int &mode, int& size)
 {
-    string file_path(path);
     string version = get_latest_version_name(entry);
-    string full_path = file_path + "/" + version;
+    string full_path = path + "/" + version;
 
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << full_path));
     if (!cursor->more()) {
@@ -110,11 +107,10 @@ int get_latest_version_info(const char *path, ScopedDbConnection *c, BSONObj &en
     return 0;
 }
 
-const char *get_latest_version_data(const char *path, ScopedDbConnection *c, BSONObj &entry, int &data_length)
+const char *get_latest_version_data(const string &path, ScopedDbConnection *c, BSONObj &entry, int &data_length)
 {
-    string file_path(path);
     string version = get_latest_version_name(entry);
-    string full_path = file_path + "/" + version;
+    string full_path = path + "/" + version;
 
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << full_path));
     if (!cursor->more()) {
@@ -136,13 +132,11 @@ const char *get_latest_version_data(const char *path, ScopedDbConnection *c, BSO
     return ver_entry.getField("data").binData(data_length);
 }
 
-void remove_versions_and_file(const char *path, ScopedDbConnection *c, BSONObj &entry)
+void remove_versions_and_file(const string &path, ScopedDbConnection *c, BSONObj &entry)
 {
-    string file_path(path);
-
     vector< BSONElement > vers = entry["data"].Array();
     for (int i = 0; i < vers.size(); i++) {
-        string full_path = file_path + "/" + vers[i].String();
+        string full_path = path + "/" + vers[i].String();
 	c->conn().remove(db_name, QUERY("_id" << full_path));
     }    
 

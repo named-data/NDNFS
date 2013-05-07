@@ -22,14 +22,14 @@
 
 #include "ndnfs.h"
 
-void create_version(const char *path, mongo::ScopedDbConnection *c);
+void create_version(const std::string &path, mongo::ScopedDbConnection *c);
 
-void add_version_with_data(const char *path, mongo::ScopedDbConnection *c, const char *file_data, int file_size);
+void add_version_with_data(const std::string &path, mongo::ScopedDbConnection *c, const char *file_data, int file_size);
 
-int get_latest_version_info(const char *path, mongo::ScopedDbConnection *c, mongo::BSONObj &entry, int &mode, int& size);
+int get_latest_version_info(const std::string &path, mongo::ScopedDbConnection *c, mongo::BSONObj &entry, int &mode, int& size);
 
-const char *get_latest_version_data(const char *path, mongo::ScopedDbConnection *c, mongo::BSONObj &entry, int &data_length);
+const char *get_latest_version_data(const std::string &path, mongo::ScopedDbConnection *c, mongo::BSONObj &entry, int &data_length);
 
-void remove_versions_and_file(const char *path, mongo::ScopedDbConnection *c, mongo::BSONObj &entry);
+void remove_versions_and_file(const std::string &path, mongo::ScopedDbConnection *c, mongo::BSONObj &entry);
 
 #endif

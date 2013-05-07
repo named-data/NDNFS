@@ -56,10 +56,4 @@ inline int split_last_component(const std::string& path, std::string &prefix, st
     return 0;
 }
 
-inline int split_last_component(const char *path, std::string &prefix, std::string &name)
-{
-    std::string path_string(path);
-    return split_last_component(path_string, prefix, name);
-}
-
 #endif

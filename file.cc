@@ -123,11 +123,12 @@ int ndnfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
     cout << "ndnfs_create: called with path " << path << endl;
     cout << "ndnfs_create: create file with flag " << fi->flags << " and mode " << mode << endl;
     
+    string file_path(path);
     string dir_path, file_name;
-    split_last_component(path, dir_path, file_name);
+    split_last_component(file_path, dir_path, file_name);
     
     ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
-    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
+    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << file_path));
     if (cursor->more()) {
         // Cannot create file that has conflicting file name
         c->done();
@@ -144,7 +145,7 @@ int ndnfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
     }
     
     // Create a version for the new file; add both file and the new version into database
-    create_version(path, c);
+    create_version(file_path, c);
     
     // Append to existing BSON array of the parent folder
     c->conn().update(db_name, BSON("_id" << dir_path), BSON( "$push" << BSON( "data" << file_name ) ));
@@ -158,9 +159,10 @@ int ndnfs_write(const char *path, const char *buf, size_t size, off_t offset, st
 {
     cout << "ndnfs_write: called with path " << path << endl;
     cout << "ndnfs_write: start write at offset " << offset << " with size " << size << endl;
-    
+
+    string file_path(path);
     ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
-    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
+    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << file_path));
     if (!cursor->more()) {
         c->done();
         delete c;
@@ -175,7 +177,7 @@ int ndnfs_write(const char *path, const char *buf, size_t size, off_t offset, st
     }
     
     int old_co_size;
-    const char *old_co_raw = get_latest_version_data(path, c, entry, old_co_size);
+    const char *old_co_raw = get_latest_version_data(file_path, c, entry, old_co_size);
     
     int old_file_size = 0;
     const char *old_content = NULL;
@@ -201,7 +203,7 @@ int ndnfs_write(const char *path, const char *buf, size_t size, off_t offset, st
     
     memcpy(content + offset, buf, size);
     
-    add_version_with_data(path, c, content, file_size);
+    add_version_with_data(file_path, c, content, file_size);
     
     delete content;
     
@@ -214,8 +216,9 @@ int ndnfs_unlink(const char *path)
 {
     cout << "ndnfs_unlink: called with path " << path << endl;
     
+    string file_path(path);
     string dir_path, file_name;
-    split_last_component(path, dir_path, file_name);
+    split_last_component(file_path, dir_path, file_name);
     
     ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
     
@@ -252,7 +255,7 @@ int ndnfs_unlink(const char *path)
     BSONObj file_entry = cursor->next();
     
     // Remove file entry with all the version entries
-    remove_versions_and_file(path, c, file_entry);
+    remove_versions_and_file(file_path, c, file_entry);
 
     c->done();
     delete c;
