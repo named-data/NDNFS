@@ -86,7 +86,7 @@ int ndnfs_mkdir(const char *path, mode_t mode)
     
     // Add new file entry with empty content
     BSONObj dir_entry = BSONObjBuilder().append("_id", path).append("type", dir_type).append("mode", 0777)
-                            .append("data", BSONArrayBuilder().arr()).obj();
+                        .append("data", BSONArrayBuilder().arr()).obj();
     c->conn().insert(db_name, dir_entry);
     // Append to existing BSON array
     c->conn().update(db_name, BSON("_id" << dir_path), BSON( "$push" << BSON( "data" << dir_name ) ));

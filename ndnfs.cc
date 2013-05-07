@@ -77,43 +77,6 @@ int main(int argc, char **argv)
         BSONObj root_dir = BSONObjBuilder().append("_id", "/").append("type", dir_type).append("mode", 0777)
                             .append("data", BSONArrayBuilder().arr()).obj();
         c->conn().insert(db_name, root_dir);
-        
-        /* For test use, should remove later */
-        // Add a file
-        const char *hello = "Hello World!\n";
-        ndn::Bytes hello_co = ndn_wrapper.createContentObject(ndn::Name ("/hello.txt"),
-                                                         hello,
-                                                         13);
-        unsigned char *co_raw = ndn::head(hello_co);
-        int co_len = hello_co.size();
-        BSONObj hello_file = BSONObjBuilder().append("_id", "/hello.txt").append("type", file_type).append("mode", 0666)
-                            .appendBinData("data", co_len, BinDataGeneral, co_raw).append("size", 13).obj();
-        c->conn().insert(db_name, hello_file);
-        c->conn().update(db_name, BSON( "_id" << "/" ), BSON( "$push" << BSON( "data" << "hello.txt" ) ) );
-        // Add an empty file
-        BSONObj empty_file = BSONObjBuilder().append("_id", "/empty.txt").append("type", file_type).append("mode", 0666)
-                            .appendBinData("data", 0, BinDataGeneral, NULL).append("size", 0).obj();
-        c->conn().insert(db_name, empty_file);
-        c->conn().update(db_name, BSON( "_id" << "/" ), BSON( "$push" << BSON( "data" << "empty.txt" ) ) );
-        // Add a folder
-        BSONObj hello_dir = BSONObjBuilder().append("_id", "/hello").append("type", dir_type).append("mode", 0777)
-                            .append("data", BSONArrayBuilder().arr()).obj();
-        c->conn().insert(db_name, hello_dir);
-        c->conn().update(db_name, BSON( "_id" << "/" ), BSON( "$push" << BSON( "data" << "hello" ) ) );
-        
-        /*
-        // Test parsing content object
-        auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << "/hello.txt"));
-        BSONObj entry = cursor->next();
-        int co_size;
-        const char *co = entry.getField("data").binData(co_size);
-        Ccnx::ParsedContentObject pco((const unsigned char *)co, co_size);
-        
-        Ccnx::BytesPtr content = pco.contentPtr();
-        cout << "parsed content is: " << Ccnx::head(*content) << endl;
-         */
-        
-        /* End of test */
     }
     cout << "main: ok" << endl;
     
@@ -122,6 +85,6 @@ int main(int argc, char **argv)
     
     create_fuse_operations(&ndnfs_fs_ops);
     
-    cout << "main: enter FUSE main loop" << endl;
+    cout << "main: enter FUSE main loop" << endl << endl;
     return fuse_main(argc, argv, &ndnfs_fs_ops, NULL);
 }

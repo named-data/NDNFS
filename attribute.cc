@@ -39,15 +39,22 @@ int ndnfs_getattr(const char *path, struct stat *stbuf)
     
     BSONObj entry = cursor->next();  // There should be no two entries with the same id (absolute path)
     int type = entry.getIntField("type");
-    int mode = entry.getIntField("mode");
     
     if (type == dir_type) {
+	int mode = entry.getIntField("mode");
         stbuf->st_mode = S_IFDIR | mode;
         stbuf->st_nlink = 1;
     } else if (type == file_type) {
+	int mode, size;
+	if (get_latest_version_info(path, c, entry, mode, size) == -1) {
+	    c->done();
+	    delete c;
+	    return -ENOENT;
+	}
+	
         stbuf->st_mode = S_IFREG | mode;
         stbuf->st_nlink = 1;
-        stbuf->st_size = entry.getIntField("size");
+        stbuf->st_size = size;
     }
     
     c->done();

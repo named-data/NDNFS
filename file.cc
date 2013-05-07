@@ -36,12 +36,22 @@ int ndnfs_open(const char *path, struct fuse_file_info *fi)
         return -ENOENT;
     }
 
-    //TODO: check mode
-    
+    // TODO: check flags with file mode    
     //BSONObj entry = cursor->next();
-    //if ((fi->flags & O_ACCMODE) != O_RDONLY)
-    //    return -EACCES;
-
+//     switch (fi->flags & O_ACCMODE) {
+//     case O_RDONLY:
+// 	cout << "read only" << endl;
+// 	break;
+//     case O_WRONLY:
+// 	cout << "write only" << endl;
+// 	break;
+//     case O_RDWR:
+// 	cout << "read write" << endl;
+// 	break;
+//     default:
+// 	break;
+//     }
+    
     c->done();
     delete c;
     return 0;
@@ -74,12 +84,21 @@ int ndnfs_read(const char *path, char *buf, size_t size, off_t offset, struct fu
     }
     
     int co_size;
-    const char *co_raw = entry.getField("data").binData(co_size);
+    const char *co_raw = get_latest_version_data(path, c, entry, co_size);
+    if (co_size == -1) {
+	c->done();
+        delete c;
+        return -ENOENT;
+    } else if (co_size == 0) {
+	c->done();
+        delete c;
+        return 0;
+    }
+
     ndn::ParsedContentObject pco((const unsigned char *)co_raw, co_size);
     ndn::BytesPtr co_content = pco.contentPtr();
     
-    int file_size = entry.getIntField("size");
-    assert(co_content->size() == file_size);
+    int file_size = co_content->size();
     const char *content = (const char *)ndn::head(*co_content);
 
     if ((size_t)offset >= file_size) {/* Trying to read past the end of file. */
@@ -116,7 +135,7 @@ int ndnfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
         return -EEXIST;
     }
     
-    // Cannot create file without creating necessary folders
+    // Cannot create file without creating necessary folders in advance
     cursor = c->conn().query(db_name, QUERY("_id" << dir_path));
     if (!cursor->more()) {
         c->done();
@@ -124,13 +143,10 @@ int ndnfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
         return -ENOENT;
     }
     
-    BSONObj entry = cursor->next();
+    // Create a version for the new file; add both file and the new version into database
+    create_version(path, c);
     
-    // Add new file entry with empty content, "data" field is not set
-    BSONObj file_entry = BSONObjBuilder().append("_id", path).append("type", file_type).append("mode", 0666)
-                        .appendBinData("data", 0, BinDataGeneral, NULL).append("size", 0).obj();
-    c->conn().insert(db_name, file_entry);
-    // Append to existing BSON array
+    // Append to existing BSON array of the parent folder
     c->conn().update(db_name, BSON("_id" << dir_path), BSON( "$push" << BSON( "data" << file_name ) ));
     
     c->done();
@@ -159,7 +175,7 @@ int ndnfs_write(const char *path, const char *buf, size_t size, off_t offset, st
     }
     
     int old_co_size;
-    const char *old_co_raw = entry.getField("data").binData(old_co_size);
+    const char *old_co_raw = get_latest_version_data(path, c, entry, old_co_size);
     
     int old_file_size = 0;
     const char *old_content = NULL;
@@ -167,8 +183,7 @@ int ndnfs_write(const char *path, const char *buf, size_t size, off_t offset, st
         ndn::ParsedContentObject pco((const unsigned char *)old_co_raw, old_co_size);
         ndn::BytesPtr old_co_content = pco.contentPtr();
     
-        old_file_size = entry.getIntField("size");
-        assert(old_co_content->size() == old_file_size);
+        old_file_size = old_co_content->size();
         old_content = (const char *)ndn::head(*old_co_content);
         
         if (old_file_size < offset) {
@@ -186,15 +201,7 @@ int ndnfs_write(const char *path, const char *buf, size_t size, off_t offset, st
     
     memcpy(content + offset, buf, size);
     
-    ndn::Bytes co = ndn_wrapper.createContentObject(ndn::Name (path),
-                                                           content,
-                                                           file_size);
-    unsigned char *co_raw = ndn::head(co);
-    int co_size = co.size();
-    BSONObj data_obj = BSONObjBuilder().appendBinData("data", co_size, BinDataGeneral, co_raw).obj();
-    
-    c->conn().update(db_name, BSON("_id" << path), BSON( "$set" << data_obj ));
-    c->conn().update(db_name, BSON("_id" << path), BSON( "$set" << BSON( "size" << (int)(file_size) ) ));
+    add_version_with_data(path, c, content, file_size);
     
     delete content;
     
@@ -211,32 +218,22 @@ int ndnfs_unlink(const char *path)
     split_last_component(path, dir_path, file_name);
     
     ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
-    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
-    if (!cursor->more()) {
-        // Cannot remove non-existing data
-        c->done();
-        delete c;
-        return -EEXIST;
-    }
     
-    // Remove file entry
-    c->conn().remove(db_name, QUERY("_id" << path));
-    
-    // Remove pointer in the folder that holds the file
+    // First remove pointer in the folder that holds the file
     // XXX: low performance!!!
-    cursor = c->conn().query(db_name, QUERY("_id" << dir_path));
+    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << dir_path));
     if (!cursor->more()) {
-        c->done();
+	c->done();
         delete c;
         return -EEXIST;
     }
     
-    BSONObj entry = cursor->next();
-    vector< BSONElement > data = entry["data"].Array();
+    BSONObj dir_entry = cursor->next();
+    vector< BSONElement > dir_data = dir_entry["data"].Array();
     
     BSONArrayBuilder bab;
-    for (int i = 0; i < data.size(); i++) {
-        string s = data[i].String();
+    for (int i = 0; i < dir_data.size(); i++) {
+        string s = dir_data[i].String();
         if (s != file_name) {
             bab.append(s);
         }
@@ -244,6 +241,19 @@ int ndnfs_unlink(const char *path)
    
     c->conn().update(db_name, BSON("_id" << dir_path), BSON( "$set" << BSON( "data" << bab.arr() ) ));
     
+    // Then remove file entry
+    cursor = c->conn().query(db_name, QUERY("_id" << path));
+    if (!cursor->more()) {
+        c->done();
+        delete c;
+        return -EEXIST;
+    }
+
+    BSONObj file_entry = cursor->next();
+    
+    // Remove file entry with all the version entries
+    remove_versions_and_file(path, c, file_entry);
+
     c->done();
     delete c;
     return 0;

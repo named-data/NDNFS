@@ -17,12 +17,19 @@
  * Author: Wentao Shang <wentao@cs.ucla.edu>
  */
 
-#ifndef NDNFS_ATTRIBUTE_H
-#define NDNFS_ATTRIBUTE_H
+#ifndef VERSION_H
+#define VERSION_H
 
 #include "ndnfs.h"
-#include "version.h"
 
-int ndnfs_getattr(const char *path, struct stat *stbuf);
+void create_version(const char *path, mongo::ScopedDbConnection *c);
+
+void add_version_with_data(const char *path, mongo::ScopedDbConnection *c, const char *file_data, int file_size);
+
+int get_latest_version_info(const char *path, mongo::ScopedDbConnection *c, mongo::BSONObj &entry, int &mode, int& size);
+
+const char *get_latest_version_data(const char *path, mongo::ScopedDbConnection *c, mongo::BSONObj &entry, int &data_length);
+
+void remove_versions_and_file(const char *path, mongo::ScopedDbConnection *c, mongo::BSONObj &entry);
 
 #endif
