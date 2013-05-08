@@ -79,8 +79,9 @@ int main(int argc, char **argv)
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << "/"));
     if (!cursor->more()) {
         // Create root directory as an empty folder if database is empty
-        BSONObj root_dir = BSONObjBuilder().append("_id", "/").append("type", dir_type).append("mode", 0777)
-                            .append("data", BSONArrayBuilder().arr()).obj();
+	int now = time(0);
+	BSONObj root_dir = BSONObjBuilder().append("_id", "/").append("type", dir_type).append("mode", 0777)
+	    .append("atime", now).append("mtime", now).append("data", BSONArrayBuilder().arr()).obj();
         c->conn().insert(db_name, root_dir);
     }
     cout << "main: ok" << endl;

@@ -41,8 +41,9 @@ int ndnfs_getattr(const char *path, struct stat *stbuf)
     int type = entry.getIntField("type");
     
     if (type == dir_type) {
-	int mode = entry.getIntField("mode");
-        stbuf->st_mode = S_IFDIR | mode;
+	stbuf->st_mode = S_IFDIR | entry.getIntField("mode");
+	stbuf->st_atime = entry.getIntField("atime");
+	stbuf->st_mtime = entry.getIntField("mtime");
         stbuf->st_nlink = 1;
     } else if (type == file_type) {
 	int mode, size;
@@ -53,6 +54,8 @@ int ndnfs_getattr(const char *path, struct stat *stbuf)
 	}
 	
         stbuf->st_mode = S_IFREG | mode;
+	stbuf->st_atime = entry.getIntField("atime");
+	stbuf->st_mtime = entry.getIntField("mtime");
         stbuf->st_nlink = 1;
         stbuf->st_size = size;
     }

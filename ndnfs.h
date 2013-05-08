@@ -29,6 +29,8 @@
 #include <sstream>
 #include <string>
 
+#include <time.h>
+
 #include <fuse.h>
 #include <mongo/client/dbclient.h>
 #include <ndn.cxx.h>

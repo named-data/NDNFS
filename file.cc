@@ -78,6 +78,7 @@ int ndnfs_truncate(const char *path, off_t length)
     }
 
     int ret = truncate_latest_version(path, c, file_entry, length);
+    c->conn().update(db_name, BSON("_id" << path), BSON( "$set" << BSON( "mtime" << (int)time(0) ) ));
 
     c->done();
     delete c;   
@@ -106,6 +107,7 @@ int ndnfs_read(const char *path, char *buf, size_t size, off_t offset, struct fu
     }
 
     int size_read = read_latest_version(path, c, entry, buf, size, offset);
+    c->conn().update(db_name, BSON("_id" << path), BSON( "$set" << BSON( "atime" << (int)time(0) ) ));
     
     c->done();
     delete c;
@@ -142,14 +144,16 @@ int ndnfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
     string version = create_empty_version(file_path, c);
     
     // Create new file entry with empty content, "data" field contains the version string
+    int now = time(0);
     BSONObj file_entry = BSONObjBuilder().append("_id", file_path).append("type", file_type)
-	                 .append("data", BSONArrayBuilder().append(version).arr()).obj();
+	.append("atime", now).append("mtime", now).append("data", BSONArrayBuilder().append(version).arr()).obj();
 
     // Add the file entry to database
     c->conn().insert(db_name, file_entry);
 
     // Append to existing BSON array of the parent folder
     c->conn().update(db_name, BSON("_id" << dir_path), BSON( "$push" << BSON( "data" << file_name ) ));
+    c->conn().update(db_name, BSON("_id" << dir_path), BSON( "$set" << BSON( "mtime" << (int)time(0) ) ));
     
     c->done();
     delete c;
@@ -187,6 +191,7 @@ int ndnfs_write(const char *path, const char *buf, size_t size, off_t offset, st
     
     // Append version string to existing BSON array of the parent file
     c->conn().update(db_name, BSON("_id" << file_path), BSON( "$push" << BSON( "data" << version ) ));
+    c->conn().update(db_name, BSON("_id" << file_path), BSON( "$set" << BSON( "mtime" << (int)time(0) ) ));
     
     c->done();
     delete c;
@@ -223,6 +228,7 @@ int ndnfs_unlink(const char *path)
     } 
    
     c->conn().update(db_name, BSON("_id" << dir_path), BSON( "$set" << BSON( "data" << bab.arr() ) ));
+    c->conn().update(db_name, BSON("_id" << dir_path), BSON( "$set" << BSON( "mtime" << (int)time(0) ) ));
     
     // Then remove all the versions under the file entry
     remove_versions(file_path, c);

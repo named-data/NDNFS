@@ -85,8 +85,9 @@ int ndnfs_mkdir(const char *path, mode_t mode)
     BSONObj entry = cursor->next();
     
     // Add new file entry with empty content
+    int now = time(0);
     BSONObj dir_entry = BSONObjBuilder().append("_id", path).append("type", dir_type).append("mode", 0777)
-                        .append("data", BSONArrayBuilder().arr()).obj();
+	.append("atime", now).append("mtime", now).append("data", BSONArrayBuilder().arr()).obj();
     c->conn().insert(db_name, dir_entry);
     // Append to existing BSON array
     c->conn().update(db_name, BSON("_id" << dir_path), BSON( "$push" << BSON( "data" << dir_name ) ));
@@ -158,7 +159,8 @@ int ndnfs_rmdir(const char *path)
     }
     
     c->conn().update(db_name, BSON("_id" << parent_dir_path), BSON( "$set" << BSON( "data" << bab.arr() ) ));
-    
+    c->conn().update(db_name, BSON("_id" << parent_dir_path), BSON( "$set" << BSON( "mtime" << (int)time(0) ) ));
+
     c->done();
     delete c;
     return 0;
