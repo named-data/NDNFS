@@ -45,6 +45,10 @@ extern const int segment_type;
 extern const int seg_size;
 extern const int seg_size_shift;
 
+extern int user_id;
+extern int group_id;
+
+
 inline int split_last_component(const std::string &path, std::string &prefix, std::string &name)
 {
     size_t last_comp_pos = path.rfind('/');

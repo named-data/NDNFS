@@ -22,6 +22,9 @@
 #include "file.h"
 #include "attribute.h"
 
+#include <unistd.h>
+#include <sys/types.h>
+
 using namespace std;
 using namespace boost;
 using namespace mongo;
@@ -36,6 +39,9 @@ const int segment_type = 3;
 
 const int seg_size = 1024;  // size of the content in each content object segment counted in bytes
 const int seg_size_shift = 10;
+
+int user_id = 0;
+int group_id = 0;
 
 static void create_fuse_operations(struct fuse_operations *fuse_op)
 {
@@ -56,6 +62,10 @@ static struct fuse_operations ndnfs_fs_ops;
 int main(int argc, char **argv)
 {
     assert((1 << seg_size_shift) == seg_size);
+    
+    // uid and gid will be set to that of the user who starts the fuse process
+    user_id = getuid();
+    group_id = getgid();
 
     cout << "main: NDNFS version beta 0.1" << endl;
     cout << "main: test mongodb connection..." << endl;

@@ -59,6 +59,10 @@ int ndnfs_getattr(const char *path, struct stat *stbuf)
         stbuf->st_nlink = 1;
         stbuf->st_size = size;
     }
+
+    // Use the same id for all files and dirs
+    stbuf->st_uid = user_id;
+    stbuf->st_gid = group_id;
     
     c->done();
     delete c;
