@@ -40,9 +40,10 @@ extern const int dir_type;
 extern const int file_type;
 extern const int version_type;
 extern const int segment_type;
+extern const int seg_size;
+extern const int seg_size_shift;
 
-
-inline int split_last_component(const std::string& path, std::string &prefix, std::string &name)
+inline int split_last_component(const std::string &path, std::string &prefix, std::string &name)
 {
     size_t last_comp_pos = path.rfind('/');
     if (last_comp_pos == std::string::npos)

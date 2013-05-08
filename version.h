@@ -21,15 +21,16 @@
 #define VERSION_H
 
 #include "ndnfs.h"
+#include "segment.h"
 
-void create_version(const std::string &path, mongo::ScopedDbConnection *c);
+std::string create_empty_version(const std::string& path, mongo::ScopedDbConnection *c);
 
-void add_version_with_data(const std::string &path, mongo::ScopedDbConnection *c, const char *file_data, int file_size);
+int get_latest_version_info(const std::string& path, mongo::ScopedDbConnection *c, mongo::BSONObj& file_entry, int& mode, int& size);
 
-int get_latest_version_info(const std::string &path, mongo::ScopedDbConnection *c, mongo::BSONObj &entry, int &mode, int& size);
+int read_latest_version(const std::string& path, mongo::ScopedDbConnection *c, mongo::BSONObj& file_entry, char *output, size_t size, off_t offset);
 
-const char *get_latest_version_data(const std::string &path, mongo::ScopedDbConnection *c, mongo::BSONObj &entry, int &data_length);
+std::string add_version(const std::string& path, mongo::ScopedDbConnection *c, mongo::BSONObj& file_entry, const char *buf, size_t size, off_t offset);
 
-void remove_versions_and_file(const std::string &path, mongo::ScopedDbConnection *c, mongo::BSONObj &entry);
+void remove_versions(const std::string& path, mongo::ScopedDbConnection *c);
 
 #endif

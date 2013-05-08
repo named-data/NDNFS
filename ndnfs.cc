@@ -34,6 +34,8 @@ const int file_type = 1;
 const int version_type = 2;
 const int segment_type = 3;
 
+const int seg_size = 8;  // size of the content in each content object segment counted in bytes
+const int seg_size_shift = 3;
 
 static void create_fuse_operations(struct fuse_operations *fuse_op)
 {
@@ -52,6 +54,8 @@ static struct fuse_operations ndnfs_fs_ops;
 
 int main(int argc, char **argv)
 {
+    assert((1 << seg_size_shift) == seg_size);
+
     cout << "main: NDNFS version beta 0.1" << endl;
     cout << "main: test mongodb connection..." << endl;
     

@@ -76,46 +76,12 @@ int ndnfs_read(const char *path, char *buf, size_t size, off_t offset, struct fu
         delete c;
         return -EINVAL;
     }
-    
-    if (entry.getIntField("size") == 0) {
-        c->done();
-        delete c;
-        return 0;
-    }
-    
-    int co_size;
-    const char *co_raw = get_latest_version_data(path, c, entry, co_size);
-    if (co_size == -1) {
-	c->done();
-        delete c;
-        return -ENOENT;
-    } else if (co_size == 0) {
-	c->done();
-        delete c;
-        return 0;
-    }
 
-    ndn::ParsedContentObject pco((const unsigned char *)co_raw, co_size);
-    ndn::BytesPtr co_content = pco.contentPtr();
-    
-    int file_size = co_content->size();
-    const char *content = (const char *)ndn::head(*co_content);
-
-    if ((size_t)offset >= file_size) {/* Trying to read past the end of file. */
-        c->done();
-        delete c;
-        return 0;
-    }
-
-    if (offset + size > file_size) /* Trim the read to the file size. */
-        size = file_size - offset;
-
-    if (file_size > 0)
-        memcpy(buf, content + offset, size);
+    int size_read = read_latest_version(path, c, entry, buf, size, offset);
     
     c->done();
     delete c;
-    return size;
+    return size_read;
 }
 
 int ndnfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
@@ -144,9 +110,16 @@ int ndnfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
         return -ENOENT;
     }
     
-    // Create a version for the new file; add both file and the new version into database
-    create_version(file_path, c);
+    // Create empty version for the new file
+    string version = create_empty_version(file_path, c);
     
+    // Create new file entry with empty content, "data" field contains the version string
+    BSONObj file_entry = BSONObjBuilder().append("_id", file_path).append("type", file_type)
+	                 .append("data", BSONArrayBuilder().append(version).arr()).obj();
+
+    // Add the file entry to database
+    c->conn().insert(db_name, file_entry);
+
     // Append to existing BSON array of the parent folder
     c->conn().update(db_name, BSON("_id" << dir_path), BSON( "$push" << BSON( "data" << file_name ) ));
     
@@ -175,37 +148,17 @@ int ndnfs_write(const char *path, const char *buf, size_t size, off_t offset, st
         delete c;
         return -EINVAL;
     }
-    
-    int old_co_size;
-    const char *old_co_raw = get_latest_version_data(file_path, c, entry, old_co_size);
-    
-    int old_file_size = 0;
-    const char *old_content = NULL;
-    if (old_co_size > 0) {
-        ndn::ParsedContentObject pco((const unsigned char *)old_co_raw, old_co_size);
-        ndn::BytesPtr old_co_content = pco.contentPtr();
-    
-        old_file_size = old_co_content->size();
-        old_content = (const char *)ndn::head(*old_co_content);
-        
-        if (old_file_size < offset) {
-            c->done();
-            delete c;
-            return -EINVAL;
-        }
+
+    // Write data to a new version of the file
+    string version = add_version(file_path, c, entry, buf, size, offset);
+    if (version.empty()) {
+	c->done();
+	delete c;
+	return -EINVAL;
     }
-    
-    int file_size = offset + size;
-    char *content = new char[file_size];
-    
-    if (old_file_size > 0 && offset > 0)
-        memcpy(content, old_content, offset);
-    
-    memcpy(content + offset, buf, size);
-    
-    add_version_with_data(file_path, c, content, file_size);
-    
-    delete content;
+
+    // Append version string to existing BSON array of the parent file
+    c->conn().update(db_name, BSON("_id" << file_path), BSON( "$push" << BSON( "data" << version ) ));
     
     c->done();
     delete c;
@@ -223,7 +176,6 @@ int ndnfs_unlink(const char *path)
     ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
     
     // First remove pointer in the folder that holds the file
-    // XXX: low performance!!!
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << dir_path));
     if (!cursor->more()) {
 	c->done();
@@ -244,18 +196,11 @@ int ndnfs_unlink(const char *path)
    
     c->conn().update(db_name, BSON("_id" << dir_path), BSON( "$set" << BSON( "data" << bab.arr() ) ));
     
-    // Then remove file entry
-    cursor = c->conn().query(db_name, QUERY("_id" << path));
-    if (!cursor->more()) {
-        c->done();
-        delete c;
-        return -EEXIST;
-    }
-
-    BSONObj file_entry = cursor->next();
+    // Then remove all the versions under the file entry
+    remove_versions(file_path, c);
     
-    // Remove file entry with all the version entries
-    remove_versions_and_file(file_path, c, file_entry);
+    // Finally, remove file entry
+    c->conn().remove(db_name, QUERY("_id" << path));
 
     c->done();
     delete c;
