@@ -34,13 +34,13 @@ inline int segment_to_size(int seg)
     return (seg << seg_size_shift);
 }
 
-inline void get_segment_data_raw(mongo::BSONObj& seg_entry, const char *data, int& data_len)
+inline const char* get_segment_data_raw(mongo::BSONObj& seg_entry, int& data_len)
 {
     if (seg_entry.getIntField("size") == 0) {
-	data = NULL;
 	data_len = 0;
+	return NULL;
     } else {
-	data = seg_entry.getField("data").binData(data_len);
+	return seg_entry.getField("data").binData(data_len);
     }
 }
 

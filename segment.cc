@@ -55,8 +55,7 @@ int read_segment(const string& ver_path, ScopedDbConnection *c, const int seg, c
     }
 
     int co_size;
-    const char *co_raw;
-    get_segment_data_raw(seg_entry, co_raw, co_size);
+    const char *co_raw = get_segment_data_raw(seg_entry, co_size);
     if (co_size == 0) {
 	// This should not happen usually
 	return -1;

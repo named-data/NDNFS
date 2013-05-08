@@ -152,7 +152,7 @@ string add_version(const string& path, ScopedDbConnection *c, BSONObj& file_entr
 	if (!cursor->more()) {
 	    return string();
 	}
-    
+	
 	BSONObj last_ver_entry = cursor->next();
 	if (last_ver_entry.getIntField("type") != version_type) {
 	    return string();
@@ -181,8 +181,8 @@ string add_version(const string& path, ScopedDbConnection *c, BSONObj& file_entr
 	    if (seg_entry.getIntField("type") != segment_type) {
 		return string();
 	    }
-    
-	    get_segment_data_raw(seg_entry, old_seg_raw, old_seg_size);
+
+	    old_seg_raw = get_segment_data_raw(seg_entry, old_seg_size);
 
 	    if (old_seg_size > 0) {
 		ndn::ParsedContentObject pco((const unsigned char *)old_seg_raw, old_seg_size);
@@ -190,7 +190,7 @@ string add_version(const string& path, ScopedDbConnection *c, BSONObj& file_entr
     
 		old_data_len = old_seg_content->size();
 		old_data = (const char *)ndn::head(*old_seg_content);
-                
+		
 		make_segment(path, c, ver_num, i, false, old_data, old_data_len);
 	    }
 	}
@@ -208,7 +208,7 @@ string add_version(const string& path, ScopedDbConnection *c, BSONObj& file_entr
 	    return string();
 	}
     
-	get_segment_data_raw(seg_entry, old_seg_raw, old_seg_size);
+	old_seg_raw = get_segment_data_raw(seg_entry, old_seg_size);
 
 	if (old_seg_size > 0) {
 	    ndn::ParsedContentObject pco((const unsigned char *)old_seg_raw, old_seg_size);

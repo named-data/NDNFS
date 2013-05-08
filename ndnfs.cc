@@ -34,8 +34,8 @@ const int file_type = 1;
 const int version_type = 2;
 const int segment_type = 3;
 
-const int seg_size = 8;  // size of the content in each content object segment counted in bytes
-const int seg_size_shift = 3;
+const int seg_size = 1024;  // size of the content in each content object segment counted in bytes
+const int seg_size_shift = 10;
 
 static void create_fuse_operations(struct fuse_operations *fuse_op)
 {
