@@ -33,4 +33,6 @@ std::string add_version(const std::string& path, mongo::ScopedDbConnection *c, m
 
 void remove_versions(const std::string& path, mongo::ScopedDbConnection *c);
 
+int truncate_latest_version(const std::string& path, mongo::ScopedDbConnection *c, mongo::BSONObj& file_entry, off_t length);
+
 #endif

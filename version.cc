@@ -37,7 +37,7 @@ string create_empty_version(const string& path, ScopedDbConnection *c)
 {
     uint64_t now = timestamp();
     string version = lexical_cast<string> (now);
-    cout << "create_version: version " << version << " created for file " << path << endl;
+    //cout << "create_version: version " << version << " created for file " << path << endl;
 
     string full_path = path + "/" + version;
 
@@ -133,11 +133,13 @@ int read_latest_version(const string& path, ScopedDbConnection *c, BSONObj& file
     return total_read;
 }
 
+
+// XXX: this function needs refactoring...
 string add_version(const string& path, ScopedDbConnection *c, BSONObj& file_entry, const char *buf, size_t size, off_t offset)
 {
     uint64_t ver_num = timestamp();
     string version = lexical_cast<string> (ver_num);
-    cout << "add_version_with_data: version " << version << " created for file " << path << endl;
+    //cout << "add_version_with_data: version " << version << " created for file " << path << endl;
 
     const char *buf_pos = buf;
     size_t size_left = size;
@@ -194,55 +196,56 @@ string add_version(const string& path, ScopedDbConnection *c, BSONObj& file_entr
 		make_segment(path, c, ver_num, i, false, old_data, old_data_len);
 	    }
 	}
+	
+	if ((size_t)offset > segment_to_size(seg_off)) {
+	    // Special handling for the 'seg_off' segment
+	    string last_seg_path = last_ver_path + "/" + lexical_cast<string> (seg_off);
 
-	// Special handling for the 'seg_off' segment
-	string last_seg_path = last_ver_path + "/" + lexical_cast<string> (seg_off);
-
-	cursor = c->conn().query(db_name, QUERY("_id" << last_seg_path));
-	if (!cursor->more()) {
-	    return string();
-	}
-
-	BSONObj seg_entry = cursor->next();
-	if (seg_entry.getIntField("type") != segment_type) {
-	    return string();
-	}
-    
-	old_seg_raw = get_segment_data_raw(seg_entry, old_seg_size);
-
-	if (old_seg_size > 0) {
-	    ndn::ParsedContentObject pco((const unsigned char *)old_seg_raw, old_seg_size);
-	    ndn::BytesPtr old_seg_content = pco.contentPtr();
-
-	    old_data_len = offset - segment_to_size(seg_off);
-	    assert(old_data_len <= old_seg_content->size());
-	    old_data = (const char *)ndn::head(*old_seg_content);
-
-	    int copy_len = seg_size - old_data_len;
-	    if (copy_len > size) {
-		copy_len = size;
-		final = true;
-	    }
-
-	    char *data = new char[old_data_len + copy_len];
-	    if (data == NULL) {
+	    cursor = c->conn().query(db_name, QUERY("_id" << last_seg_path));
+	    if (!cursor->more()) {
 		return string();
 	    }
-	    
-	    memcpy(data, old_data, old_data_len);
-	    memcpy(data + old_data_len, buf, copy_len);
-	    
-	    make_segment(path, c, ver_num, seg_off++, final, data, old_data_len + copy_len);
-	    delete data;
-	    
-	    if (final) {
-		// Then we are done
-		goto out;
+
+	    BSONObj seg_entry = cursor->next();
+	    if (seg_entry.getIntField("type") != segment_type) {
+		return string();
 	    }
+    	
+	    old_seg_raw = get_segment_data_raw(seg_entry, old_seg_size);
+
+	    if (old_seg_size > 0) {
+		ndn::ParsedContentObject pco((const unsigned char *)old_seg_raw, old_seg_size);
+		ndn::BytesPtr old_seg_content = pco.contentPtr();
+
+		old_data_len = offset - segment_to_size(seg_off);
+		assert(old_data_len <= old_seg_content->size());
+		old_data = (const char *)ndn::head(*old_seg_content);
+
+		int copy_len = seg_size - old_data_len;
+		if (copy_len > size) {
+		    copy_len = size;
+		    final = true;
+		}
+
+		char *data = new char[old_data_len + copy_len];
+		if (data == NULL) {
+		    return string();
+		}
 	    
-	    // Else, move pointer forward
-	    buf_pos += copy_len;
-	    size_left -= copy_len;
+		memcpy(data, old_data, old_data_len);
+		memcpy(data + old_data_len, buf, copy_len);
+	    
+		make_segment(path, c, ver_num, seg_off++, final, data, old_data_len + copy_len);
+		delete data;
+	    
+		if (final) {
+		    // Then we are done
+		    goto out;
+		}
+		// Else, move pointer forward
+		buf_pos += copy_len;
+		size_left -= copy_len;
+	    }
 	}
     }
     
@@ -288,5 +291,50 @@ void remove_versions(const string& path, ScopedDbConnection *c)
         string ver_path = path + "/" + vers[i].String();
 	remove_segments(ver_path, c);
 	c->conn().remove(db_name, QUERY("_id" << ver_path));
+    }
+}
+
+int truncate_latest_version(const string& path, ScopedDbConnection *c, BSONObj& file_entry, off_t length)
+{
+    string version = get_latest_version_name(file_entry);
+    string ver_path = path + "/" + version;
+
+    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << ver_path));
+    if (!cursor->more()) {
+        return -ENOENT;
+    }
+    
+    BSONObj ver_entry = cursor->next();
+    if (ver_entry.getIntField("type") != version_type) {
+        return -EINVAL;
+    }
+
+    int mode, size;
+    get_version_info(ver_entry, mode, size);
+
+    if ((size_t)length == size) {
+	return 0;
+    } else if ((size_t)length < size) {
+	// Truncate to length
+	int seg_end = seek_segment(length);
+	
+        // TODO: update previous segments to a newer version
+
+	// Update version size and segment list
+	c->conn().update(db_name, BSON("_id" << ver_path), BSON( "$set" << BSON( "size" << (int)length ) ));
+	BSONArrayBuilder bab;
+	for (int i = 0; i <= seg_end; i++) {
+	    bab.append( lexical_cast<string> (i) );
+	}
+	c->conn().update(db_name, BSON("_id" << ver_path), BSON( "$set" << BSON( "data" << bab.arr() ) ));
+
+	int tail = length - segment_to_size(seg_end);
+	truncate_segment(ver_path, c, seg_end, tail);
+	remove_segments(ver_path, c, seg_end + 1);
+	
+	return 0;
+    } else {
+	// TODO: pad with zeros
+	return -1;
     }
 }

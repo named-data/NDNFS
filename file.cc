@@ -57,6 +57,34 @@ int ndnfs_open(const char *path, struct fuse_file_info *fi)
     return 0;
 }
 
+int ndnfs_truncate(const char *path, off_t length)
+{
+    cout << "ndnfs_truncate: called with path " << path << endl;
+    cout << "ndnfs_truncate: truncate to length " << length << endl;
+
+    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
+    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
+    if (!cursor->more()) {
+        c->done();
+        delete c;     
+	return -ENOENT;
+    }
+    
+    BSONObj file_entry = cursor->next();
+    if (file_entry.getIntField("type") != file_type) {
+        c->done();
+	delete c;
+	return -EISDIR;
+    }
+
+    int ret = truncate_latest_version(path, c, file_entry, length);
+
+    c->done();
+    delete c;   
+    return ret;
+}
+
+
 int ndnfs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
 {
     cout << "ndnfs_read: called with path " << path << endl;
@@ -156,7 +184,7 @@ int ndnfs_write(const char *path, const char *buf, size_t size, off_t offset, st
 	delete c;
 	return -EINVAL;
     }
-
+    
     // Append version string to existing BSON array of the parent file
     c->conn().update(db_name, BSON("_id" << file_path), BSON( "$push" << BSON( "data" << version ) ));
     

@@ -97,7 +97,7 @@ int make_segment(const string& file_path, ScopedDbConnection *c, const uint64_t 
     return 0;
 }
 
-void remove_segments(const string& ver_path, ScopedDbConnection *c)
+void remove_segments(const string& ver_path, ScopedDbConnection *c, const int start/* = 0 */)
 {
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << ver_path));
     if (!cursor->more()) {
@@ -107,8 +107,39 @@ void remove_segments(const string& ver_path, ScopedDbConnection *c)
     BSONObj ver_entry = cursor->next();
     
     vector< BSONElement > segs = ver_entry["data"].Array();
-    for (int i = 0; i < segs.size(); i++) {
+    for (int i = start; i < segs.size(); i++) {
         string seg_path = ver_path + "/" + segs[i].String();
 	c->conn().remove(db_name, QUERY("_id" << seg_path));
+    }
+}
+
+void truncate_segment(const string& ver_path, ScopedDbConnection *c, const int seg, const off_t length)
+{
+    string seg_path = ver_path + "/" + lexical_cast<string> (seg);
+    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << seg_path));
+    if (!cursor->more()) {
+        return;
+    }
+
+    if (length == 0) {
+	BSONObj bin_data = BSONObjBuilder().appendBinData("data", 0, BinDataGeneral, NULL).obj();
+	c->conn().update(db_name, BSON("_id" << seg_path), BSON( "$set" << BSON( "data" << bin_data ) ));
+    } else {
+	BSONObj seg_entry = cursor->next();
+
+	int co_size;
+	const char *co_raw = get_segment_data_raw(seg_entry, co_size);
+	assert(co_size > (int)length);
+
+	ndn::ParsedContentObject pco((const unsigned char *)co_raw, co_size);
+	ndn::BytesPtr co_content = pco.contentPtr();    
+	const char *content = (const char *)ndn::head(*co_content);
+	
+	ndn::Bytes trunc_co = ndn_wrapper.createContentObject(pco.name(), content, length);
+	unsigned char *trunc_co_raw = ndn::head(trunc_co);
+	int trunc_co_size = trunc_co.size();
+
+	BSONObj bin_data = BSONObjBuilder().appendBinData("data", trunc_co_size, BinDataGeneral, trunc_co_raw).obj();
+	c->conn().update(db_name, BSON("_id" << seg_path), BSON( "$set" << BSON( "data" << bin_data ) ));
     }
 }

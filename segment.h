@@ -48,6 +48,8 @@ int read_segment(const std::string& ver_path, mongo::ScopedDbConnection *c, cons
 
 int make_segment(const std::string& file_path, mongo::ScopedDbConnection *c, const uint64_t ver, const int seg, const bool final, const char *data, const int len);
 
-void remove_segments(const std::string& ver_path, mongo::ScopedDbConnection *c);
+void remove_segments(const std::string& ver_path, mongo::ScopedDbConnection *c, const int start = 0);
+
+void truncate_segment(const std::string& ver_path, mongo::ScopedDbConnection *c, const int seg, const off_t length);
 
 #endif
