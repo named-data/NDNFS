@@ -60,8 +60,8 @@ int ndnfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 int ndnfs_mkdir(const char *path, mode_t mode)
 {
     cout << "ndnfs_mkdir: called with path " << path << endl;
-    cout << "ndnfs_mkdir: create dir with mode " << mode << endl;
-    
+    cout << "ndnfs_mkdir: make directory with mode 0" << std::oct << mode << endl;
+
     string dir_path, dir_name;
     split_last_component(path, dir_path, dir_name);
     
@@ -86,7 +86,7 @@ int ndnfs_mkdir(const char *path, mode_t mode)
     
     // Add new file entry with empty content
     int now = time(0);
-    BSONObj dir_entry = BSONObjBuilder().append("_id", path).append("type", dir_type).append("mode", 0777)
+    BSONObj dir_entry = BSONObjBuilder().append("_id", path).append("type", dir_type).append("mode", mode)
 	.append("atime", now).append("mtime", now).append("data", BSONArrayBuilder().arr()).obj();
     c->conn().insert(db_name, dir_entry);
     // Append to existing BSON array

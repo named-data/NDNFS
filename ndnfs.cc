@@ -46,12 +46,14 @@ int group_id = 0;
 static void create_fuse_operations(struct fuse_operations *fuse_op)
 {
     fuse_op->getattr  = ndnfs_getattr;
+    fuse_op->chmod    = ndnfs_chmod;
     fuse_op->open     = ndnfs_open;
     fuse_op->read     = ndnfs_read;
     fuse_op->readdir  = ndnfs_readdir;
     fuse_op->create   = ndnfs_create;
     fuse_op->write    = ndnfs_write;
     fuse_op->truncate = ndnfs_truncate;
+    fuse_op->release  = ndnfs_release;
     fuse_op->unlink   = ndnfs_unlink;
     fuse_op->mkdir    = ndnfs_mkdir;
     fuse_op->rmdir    = ndnfs_rmdir;

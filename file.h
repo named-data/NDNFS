@@ -35,4 +35,8 @@ int ndnfs_write(const char *path, const char *buf, size_t size, off_t offset, st
 
 int ndnfs_unlink(const char *path);
 
+int ndnfs_release(const char *path, struct fuse_file_info *fi);
+
+int ndnfs_chmod(const char *path, mode_t mode);
+
 #endif

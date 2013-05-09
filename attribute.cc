@@ -53,11 +53,15 @@ int ndnfs_getattr(const char *path, struct stat *stbuf)
 	    return -ENOENT;
 	}
 	
-        stbuf->st_mode = S_IFREG | mode;
+        stbuf->st_mode = S_IFREG | entry.getIntField("mode");
 	stbuf->st_atime = entry.getIntField("atime");
 	stbuf->st_mtime = entry.getIntField("mtime");
         stbuf->st_nlink = 1;
         stbuf->st_size = size;
+    } else {
+	c->done();
+	delete c;
+	return -ENOENT;
     }
 
     // Use the same id for all files and dirs

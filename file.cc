@@ -26,7 +26,7 @@ using namespace mongo;
 int ndnfs_open(const char *path, struct fuse_file_info *fi)
 {
     cout << "ndnfs_open: called with path " << path << endl;
-    cout << "ndnfs_open: flag is " << fi->flags << endl;
+    cout << "ndnfs_open: flag is 0x" << std::hex << fi->flags << endl;
     
     ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
@@ -60,7 +60,7 @@ int ndnfs_open(const char *path, struct fuse_file_info *fi)
 int ndnfs_truncate(const char *path, off_t length)
 {
     cout << "ndnfs_truncate: called with path " << path << endl;
-    cout << "ndnfs_truncate: truncate to length " << length << endl;
+    cout << "ndnfs_truncate: truncate to length " << std::dec << length << endl;
 
     ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
@@ -89,7 +89,7 @@ int ndnfs_truncate(const char *path, off_t length)
 int ndnfs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
 {
     cout << "ndnfs_read: called with path " << path << endl;
-    cout << "ndnfs_read: start read at offset " << offset << " with size " << size << endl;
+    cout << "ndnfs_read: start read at offset " << std::dec << offset << " with size " << size << endl;
 
     ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
@@ -117,7 +117,7 @@ int ndnfs_read(const char *path, char *buf, size_t size, off_t offset, struct fu
 int ndnfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 {
     cout << "ndnfs_create: called with path " << path << endl;
-    cout << "ndnfs_create: create file with flag " << fi->flags << " and mode " << mode << endl;
+    cout << "ndnfs_create: create file with flag 0x" << std::hex << fi->flags << " and mode 0" << std::oct << mode << endl;
     
     string file_path(path);
     string dir_path, file_name;
@@ -145,7 +145,7 @@ int ndnfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
     
     // Create new file entry with empty content, "data" field contains the version string
     int now = time(0);
-    BSONObj file_entry = BSONObjBuilder().append("_id", file_path).append("type", file_type)
+    BSONObj file_entry = BSONObjBuilder().append("_id", file_path).append("type", file_type).append("mode", mode)
 	.append("atime", now).append("mtime", now).append("data", BSONArrayBuilder().append(version).arr()).obj();
 
     // Add the file entry to database
@@ -163,7 +163,7 @@ int ndnfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 int ndnfs_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
 {
     cout << "ndnfs_write: called with path " << path << endl;
-    cout << "ndnfs_write: start write at offset " << offset << " with size " << size << endl;
+    cout << "ndnfs_write: start write at offset " << std::dec << offset << " with size " << size << endl;
 
     string file_path(path);
     ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
@@ -238,5 +238,18 @@ int ndnfs_unlink(const char *path)
 
     c->done();
     delete c;
+    return 0;
+}
+
+int ndnfs_release(const char *path, struct fuse_file_info *fi)
+{
+    cout << "ndnfs_release: called with path " << path << endl;
+    return 0;
+}
+
+int ndnfs_chmod(const char *path, mode_t mode)
+{
+    cout << "ndnfs_chmod: called with path " << path << endl;
+    cout << "ndnfs_chmod: change mode to 0" << std::oct << mode << endl;
     return 0;
 }
