@@ -24,7 +24,7 @@
 #include "segment.h"
 
 inline long long generate_version() {
-    std::cout << "generate_version: called" << std::endl;
+    //std::cout << "generate_version: called" << std::endl;
     struct timeval tv;
     gettimeofday(&tv,NULL);
     return (long long)(tv.tv_sec * (uint64_t)1000000 + tv.tv_usec);

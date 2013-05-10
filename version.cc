@@ -255,6 +255,9 @@ int write_temp_version(const string& path, ScopedDbConnection *c, BSONObj& file_
 	    size_left -= copy_len;
 	}
     }
+
+    // Remove old segments after seg_0ff
+    remove_segments(tmp_ver_path, c, seg_off);
     
     while (size_left > 0) {
 	int copy_len = seg_size;
@@ -272,7 +275,7 @@ out:
     // Update temp version entry
     BSONArrayBuilder bab;
     for (int i = 0; i < seg_off; i++) {
-	bab.append( lexical_cast<string> (i) );
+	bab.append(i);
     }
     c->conn().update(db_name, BSON("_id" << tmp_ver_path), BSON( "$set" << BSON( "data" << bab.arr() << "size" << (int)(offset + size) ) ));
 
@@ -375,12 +378,11 @@ int truncate_temp_version(const string& path, ScopedDbConnection *c, BSONObj& fi
 	int seg_end = seek_segment(length);
 
 	// Update version size and segment list
-	c->conn().update(db_name, BSON("_id" << tmp_ver_path), BSON( "$set" << BSON( "size" << (int)length ) ));
 	BSONArrayBuilder bab;
 	for (int i = 0; i <= seg_end; i++) {
-	    bab.append( lexical_cast<string> (i) );
+	    bab.append(i);
 	}
-	c->conn().update(db_name, BSON("_id" << tmp_ver_path), BSON( "$set" << BSON( "data" << bab.arr() ) ));
+	c->conn().update(db_name, BSON("_id" << tmp_ver_path), BSON( "$set" << BSON( "data" << bab.arr() << "size" << (int)length ) ));
 
 	int tail = length - segment_to_size(seg_end);
 	truncate_segment(tmp_ver_path, c, seg_end, tail);

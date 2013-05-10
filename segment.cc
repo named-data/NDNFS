@@ -96,7 +96,7 @@ void remove_segments(const string& ver_path, ScopedDbConnection *c, const int st
     
     vector< BSONElement > segs = ver_entry["data"].Array();
     for (int i = start; i < segs.size(); i++) {
-        string seg_path = ver_path + "/" + segs[i].String();
+        string seg_path = ver_path + "/" + lexical_cast<string> (segs[i].Int());
 	c->conn().remove(db_name, QUERY("_id" << seg_path));
     }
 }

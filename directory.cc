@@ -158,8 +158,7 @@ int ndnfs_rmdir(const char *path)
         }
     }
     
-    c->conn().update(db_name, BSON("_id" << parent_dir_path), BSON( "$set" << BSON( "data" << bab.arr() ) ));
-    c->conn().update(db_name, BSON("_id" << parent_dir_path), BSON( "$set" << BSON( "mtime" << (int)time(0) ) ));
+    c->conn().update(db_name, BSON("_id" << parent_dir_path), BSON( "$set" << BSON( "data" << bab.arr() << "mtime" << (int)time(0) ) ));
 
     c->done();
     delete c;
