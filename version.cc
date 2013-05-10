@@ -255,9 +255,6 @@ int write_temp_version(const string& path, ScopedDbConnection *c, BSONObj& file_
 	    size_left -= copy_len;
 	}
     }
-
-    // Remove old segments after seg_0ff
-    remove_segments(tmp_ver_path, c, seg_off);
     
     while (size_left > 0) {
 	int copy_len = seg_size;
@@ -272,6 +269,9 @@ int write_temp_version(const string& path, ScopedDbConnection *c, BSONObj& file_
     }
 
 out:
+    // Remove old segments after seg_off
+    remove_segments(tmp_ver_path, c, seg_off);
+
     // Update temp version entry
     BSONArrayBuilder bab;
     for (int i = 0; i < seg_off; i++) {
