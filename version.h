@@ -23,16 +23,57 @@
 #include "ndnfs.h"
 #include "segment.h"
 
-std::string create_empty_version(const std::string& path, mongo::ScopedDbConnection *c);
+inline long long generate_version() {
+    std::cout << "generate_version: called" << std::endl;
+    struct timeval tv;
+    gettimeofday(&tv,NULL);
+    return (long long)(tv.tv_sec * (uint64_t)1000000 + tv.tv_usec);
+}
 
-int get_latest_version_info(const std::string& path, mongo::ScopedDbConnection *c, mongo::BSONObj& file_entry, int& mode, int& size);
 
-int read_latest_version(const std::string& path, mongo::ScopedDbConnection *c, mongo::BSONObj& file_entry, char *output, size_t size, off_t offset);
+inline long long get_temp_version(mongo::BSONObj& file_entry)
+{
+    return  file_entry.getField("temp").Long();
+}
 
-std::string add_version(const std::string& path, mongo::ScopedDbConnection *c, mongo::BSONObj& file_entry, const char *buf, size_t size, off_t offset);
 
-void remove_versions(const std::string& path, mongo::ScopedDbConnection *c);
+inline long long get_current_version(mongo::BSONObj& file_entry)
+{
+    return  file_entry.getField("data").Long();
+}
 
-int truncate_latest_version(const std::string& path, mongo::ScopedDbConnection *c, mongo::BSONObj& file_entry, off_t length);
+
+inline int get_version_size(mongo::BSONObj& ver_entry)
+{
+    return  ver_entry.getIntField("size");
+}
+
+int get_version_size(const std::string& path, mongo::ScopedDbConnection *c, const long long ver);
+
+long long create_temp_version(const std::string& path, mongo::ScopedDbConnection *c);
+
+int get_current_version_size(const std::string& path, mongo::ScopedDbConnection *c, mongo::BSONObj& file_entry);
+
+int read_version(const std::string& ver_path, mongo::ScopedDbConnection *c, char *output, size_t size, off_t offset);
+
+inline int read_current_version(const std::string& path, mongo::ScopedDbConnection *c, mongo::BSONObj& file_entry, char *output, size_t size, off_t offset)
+{
+    long long curr_ver = get_current_version(file_entry);
+    if (curr_ver == -1)
+	return -1;
+    
+    std::string version = boost::lexical_cast<std::string> (curr_ver);
+    std::string ver_path = path + "/" + version;
+    return read_version(ver_path, c, output, size, offset);
+}
+
+
+int write_temp_version(const std::string& path, mongo::ScopedDbConnection *c, mongo::BSONObj& file_entry, const char *buf, size_t size, off_t offset);
+
+int truncate_temp_version(const std::string& path, mongo::ScopedDbConnection *c, mongo::BSONObj& file_entry, off_t length);
+
+void remove_version(const std::string& ver_path, mongo::ScopedDbConnection *c);
+
+void remove_versions(const std::string& file_path, mongo::ScopedDbConnection *c);
 
 #endif

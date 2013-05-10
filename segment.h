@@ -22,7 +22,6 @@
 
 #include "ndnfs.h"
 
-int create_empty_segment(const std::string& ver_path, mongo::ScopedDbConnection *c);
 
 inline int seek_segment(int doff)
 {

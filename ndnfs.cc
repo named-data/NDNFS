@@ -37,8 +37,8 @@ const int file_type = 1;
 const int version_type = 2;
 const int segment_type = 3;
 
-const int seg_size = 1024;  // size of the content in each content object segment counted in bytes
-const int seg_size_shift = 10;
+const int seg_size = 4096;  // size of the content in each content object segment counted in bytes
+const int seg_size_shift = 12;
 
 int user_id = 0;
 int group_id = 0;

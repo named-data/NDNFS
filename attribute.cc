@@ -46,18 +46,11 @@ int ndnfs_getattr(const char *path, struct stat *stbuf)
 	stbuf->st_mtime = entry.getIntField("mtime");
         stbuf->st_nlink = 1;
     } else if (type == file_type) {
-	int mode, size;
-	if (get_latest_version_info(path, c, entry, mode, size) == -1) {
-	    c->done();
-	    delete c;
-	    return -ENOENT;
-	}
-	
         stbuf->st_mode = S_IFREG | entry.getIntField("mode");
 	stbuf->st_atime = entry.getIntField("atime");
 	stbuf->st_mtime = entry.getIntField("mtime");
         stbuf->st_nlink = 1;
-        stbuf->st_size = size;
+        stbuf->st_size = entry.getIntField("size");
     } else {
 	c->done();
 	delete c;
@@ -70,5 +63,24 @@ int ndnfs_getattr(const char *path, struct stat *stbuf)
     
     c->done();
     delete c;
+    return 0;
+}
+
+
+int ndnfs_chmod(const char *path, mode_t mode)
+{
+    cout << "ndnfs_chmod: called with path " << path << endl;
+    cout << "ndnfs_chmod: change mode to 0" << std::oct << mode << endl;
+
+    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
+    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
+    if (!cursor->more()) {
+        c->done();
+        delete c;
+        return -ENOENT;
+    }
+
+    c->conn().update(db_name, BSON("_id" << path), BSON( "$set" << BSON( "mode" << (int)mode ) ));
+
     return 0;
 }

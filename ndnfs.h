@@ -30,9 +30,14 @@
 #include <string>
 
 #include <time.h>
+#include <sys/time.h>
 
 #include <fuse.h>
+
 #include <mongo/client/dbclient.h>
+
+#include <boost/lexical_cast.hpp>
+
 #include <ndn.cxx.h>
 
 extern ndn::Wrapper ndn_wrapper;

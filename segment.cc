@@ -25,20 +25,6 @@ using namespace std;
 using namespace boost;
 using namespace mongo;
 
-int create_empty_segment(const string& ver_path, ScopedDbConnection *c)
-{
-    int seg_num = 0;
-    string segment = lexical_cast<string> (seg_num);
-    string full_path = ver_path + "/" + segment;
-    BSONObj seg_entry = BSONObjBuilder().append("_id", full_path).append("type", segment_type)
-	.appendBinData("data", 0, BinDataGeneral, NULL).append("offset", 0).obj();
-
-    // Add segment entry to database
-    c->conn().insert(db_name, seg_entry);
-    
-    return 0;
-}
-
 int read_segment(const string& ver_path, ScopedDbConnection *c, const int seg, char *output, const int limit, const int offset)
 {
     string segment = lexical_cast<string> (seg);
@@ -74,11 +60,13 @@ int read_segment(const string& ver_path, ScopedDbConnection *c, const int seg, c
     return copy_len;
 }
 
+
 int make_segment(const string& file_path, ScopedDbConnection *c, const uint64_t ver, const int seg, const bool final, const char *data, const int len)
 {
     string version = lexical_cast<string> (ver);
     string segment = lexical_cast<string> (seg);
-    string full_path = file_path + "/" + version + "/" + segment;
+    string ver_path = file_path + "/" + version;
+    string full_path = ver_path + "/" + segment;
 
     ndn::Name seg_name(file_path);
     seg_name.appendVersion(ver);

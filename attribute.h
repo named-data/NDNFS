@@ -25,4 +25,6 @@
 
 int ndnfs_getattr(const char *path, struct stat *stbuf);
 
+int ndnfs_chmod(const char *path, mode_t mode);
+
 #endif

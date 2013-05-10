@@ -19,61 +19,16 @@
 
 #include "version.h"
 
-#include <sys/time.h>
-#include <boost/lexical_cast.hpp>
-
 using namespace std;
 using namespace boost;
 using namespace mongo;
 
 
-static inline uint64_t timestamp() {
-    struct timeval tv;
-    gettimeofday(&tv,NULL);
-    return tv.tv_sec * (uint64_t)1000000 + tv.tv_usec;
-}
-
-string create_empty_version(const string& path, ScopedDbConnection *c)
+int get_version_size(const string& path, ScopedDbConnection *c, const long long ver)
 {
-    uint64_t now = timestamp();
-    string version = lexical_cast<string> (now);
-    //cout << "create_version: version " << version << " created for file " << path << endl;
+    string ver_path = path + "/" + lexical_cast<string> (ver);
 
-    string full_path = path + "/" + version;
-
-    // Create empty segment for this version
-    create_empty_segment(full_path, c);
-
-    BSONObj ver_entry = BSONObjBuilder().append("_id", full_path).append("type", version_type).append("mode", 0666)
-	.append("data", BSONArrayBuilder().append("0").arr()).append("size", 0).append("final", 0).obj();
-
-    // Add verion entry to database
-    c->conn().insert(db_name, ver_entry);
-    
-    return version;
-}
-
-
-static inline string get_latest_version_name(BSONObj& file_entry)
-{
-    vector< BSONElement > data = file_entry["data"].Array();
-    return data[ data.size() - 1 ].String();
-}
-
-
-static inline int get_version_info(BSONObj& ver_entry, int& mode, int& size)
-{
-    size = ver_entry.getIntField("size");
-    mode = ver_entry.getIntField("mode");
-    return 0;
-}
-
-int get_latest_version_info(const string& path, ScopedDbConnection *c, BSONObj& file_entry, int& mode, int& size)
-{
-    string version = get_latest_version_name(file_entry);
-    string full_path = path + "/" + version;
-
-    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << full_path));
+    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << ver_path));
     if (!cursor->more()) {
         return -1;
     }
@@ -83,13 +38,30 @@ int get_latest_version_info(const string& path, ScopedDbConnection *c, BSONObj& 
         return -1;
     }
     
-    return get_version_info(ver_entry, mode, size);
+    return get_version_size(ver_entry);
 }
 
-int read_latest_version(const string& path, ScopedDbConnection *c, BSONObj& file_entry, char *output, size_t size, off_t offset)
+int get_current_version_size(const string& path, ScopedDbConnection *c, BSONObj& file_entry)
 {
-    string version = get_latest_version_name(file_entry);
+    string version = lexical_cast<string> (get_current_version(file_entry));
     string ver_path = path + "/" + version;
+
+    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << ver_path));
+    if (!cursor->more()) {
+        return -1;
+    }
+
+    BSONObj ver_entry = cursor->next();
+    if (ver_entry.getIntField("type") != version_type) {
+        return -1;
+    }
+    
+    return get_version_size(ver_entry);
+}
+
+
+int read_version(const string& ver_path, ScopedDbConnection *c, char *output, size_t size, off_t offset)
+{
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << ver_path));
     if (!cursor->more()) {
 	return -ENOENT;
@@ -134,118 +106,153 @@ int read_latest_version(const string& path, ScopedDbConnection *c, BSONObj& file
 }
 
 
-// XXX: this function needs refactoring...
-string add_version(const string& path, ScopedDbConnection *c, BSONObj& file_entry, const char *buf, size_t size, off_t offset)
+int write_temp_version(const string& path, ScopedDbConnection *c, BSONObj& file_entry, const char *buf, size_t size, off_t offset)
 {
-    uint64_t ver_num = timestamp();
-    string version = lexical_cast<string> (ver_num);
-    //cout << "add_version_with_data: version " << version << " created for file " << path << endl;
+    int seg_off = seek_segment(offset);
+
+    long long tmp_ver_num = get_temp_version(file_entry);
+    string tmp_ver = lexical_cast<string> (tmp_ver_num);
+    string tmp_ver_path = path + "/" + tmp_ver;
+
+    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << tmp_ver_path));
+    if (!cursor->more()) {
+	// *copy-on-write* strategy:
+	// If temp version is not inserted, create a new entry for the temp version.
+	// This only happens on the first write() after open()
+	BSONArrayBuilder bab;
+
+	if (offset > 0) {
+	    // Copy data from current version
+	    string curr_ver_path = path + "/" + lexical_cast<string> (get_current_version(file_entry));
+	    cursor = c->conn().query(db_name, QUERY("_id" << curr_ver_path));
+	    if (!cursor->more()) {
+		return -1;
+	    }
+	
+	    BSONObj curr_ver_entry = cursor->next();
+	    if (curr_ver_entry.getIntField("type") != version_type) {
+		return -1;
+	    }
+
+	    if (curr_ver_entry.getIntField("size") < (size_t)offset) {
+		// Trying to read after file end
+		return -1;
+	    }
+	
+	    // Copy old data before the offset
+	    int seg_len;
+	    const char *seg_raw;
+	    int data_len;
+	    const char *data;
+	    int i = 0;
+	    int tail = offset;
+	    while (tail > 0) {
+		string seg_path = curr_ver_path + "/" + lexical_cast<string> (i);
+
+		cursor = c->conn().query(db_name, QUERY("_id" << seg_path));
+		if (!cursor->more()) {
+		    return -1;
+		}
+
+		BSONObj seg_entry = cursor->next();
+		if (seg_entry.getIntField("type") != segment_type) {
+		    return -1;
+		}
+
+		seg_raw = get_segment_data_raw(seg_entry, seg_len);
+
+		ndn::ParsedContentObject pco((const unsigned char *)seg_raw, seg_len);
+		ndn::BytesPtr seg_content = pco.contentPtr();
+    
+		data_len = (seg_content->size() > tail) ? tail : seg_content->size();
+		data = (const char *)ndn::head(*seg_content);
+		
+		make_segment(path, c, tmp_ver_num, i, false, data, data_len);
+		    
+		bab.append(i);
+		
+		tail -= data_len;
+		i++;
+	    }
+	    assert(i <= seg_off);
+	}
+
+        // Insert temp version entry
+	BSONObj ver_entry = BSONObjBuilder().append("_id", tmp_ver_path).append("type", version_type)
+	    .append("data", bab.arr()).append("size", offset).obj();
+
+        // Add verion entry to database
+	c->conn().insert(db_name, ver_entry);
+    
+	// Update cursor
+	cursor = c->conn().query(db_name, QUERY("_id" << tmp_ver_path));
+	if (!cursor->more()) {
+	    // If this fails, then we have something really bad
+	    return -1;
+	}
+    }
+
+    // From now on, we only work on the temp version
+    BSONObj tmp_ver_entry = cursor->next();
+    if (tmp_ver_entry.getIntField("type") != version_type) {
+	// This should never happen
+	return -1;
+    }
 
     const char *buf_pos = buf;
     size_t size_left = size;
     bool final = false;
-    int seg_off = seek_segment(offset);
+    int tail = offset - segment_to_size(seg_off);
 
-    if (offset > 0) {
-	// Copy data from last version
-	string last_ver = get_latest_version_name(file_entry);
-	string last_ver_path = path + "/" + last_ver;
-	auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << last_ver_path));
+    if (tail > 0) {	
+	// Special handling for the 'seg_off' segment
+	string seg_path = tmp_ver_path + "/" + lexical_cast<string> (seg_off);
+
+	cursor = c->conn().query(db_name, QUERY("_id" << seg_path));
 	if (!cursor->more()) {
-	    return string();
-	}
-	
-	BSONObj last_ver_entry = cursor->next();
-	if (last_ver_entry.getIntField("type") != version_type) {
-	    return string();
+	    return -1;
 	}
 
-	int old_file_size = last_ver_entry.getIntField("size");
-	if (old_file_size < (size_t)offset) {
-	    // Trying to read after file end
-	    return string();
+	BSONObj seg_entry = cursor->next();
+	if (seg_entry.getIntField("type") != segment_type) {
+	    return -1;
 	}
-	
-	// Copy old data before the offset
-	int old_seg_size;
-	const char *old_seg_raw;
-	int old_data_len;
-	const char *old_data;
-	for (int i = 0; i < seg_off; i++) {
-	    string last_seg_path = last_ver_path + "/" + lexical_cast<string> (i);
-
-	    cursor = c->conn().query(db_name, QUERY("_id" << last_seg_path));
-	    if (!cursor->more()) {
-		return string();
-	    }
-
-	    BSONObj seg_entry = cursor->next();
-	    if (seg_entry.getIntField("type") != segment_type) {
-		return string();
-	    }
-
-	    old_seg_raw = get_segment_data_raw(seg_entry, old_seg_size);
-
-	    if (old_seg_size > 0) {
-		ndn::ParsedContentObject pco((const unsigned char *)old_seg_raw, old_seg_size);
-		ndn::BytesPtr old_seg_content = pco.contentPtr();
-    
-		old_data_len = old_seg_content->size();
-		old_data = (const char *)ndn::head(*old_seg_content);
-		
-		make_segment(path, c, ver_num, i, false, old_data, old_data_len);
-	    }
-	}
-	
-	if ((size_t)offset > segment_to_size(seg_off)) {
-	    // Special handling for the 'seg_off' segment
-	    string last_seg_path = last_ver_path + "/" + lexical_cast<string> (seg_off);
-
-	    cursor = c->conn().query(db_name, QUERY("_id" << last_seg_path));
-	    if (!cursor->more()) {
-		return string();
-	    }
-
-	    BSONObj seg_entry = cursor->next();
-	    if (seg_entry.getIntField("type") != segment_type) {
-		return string();
-	    }
     	
-	    old_seg_raw = get_segment_data_raw(seg_entry, old_seg_size);
+	int seg_len;
+	const char *seg_raw = get_segment_data_raw(seg_entry, seg_len);
 
-	    if (old_seg_size > 0) {
-		ndn::ParsedContentObject pco((const unsigned char *)old_seg_raw, old_seg_size);
-		ndn::BytesPtr old_seg_content = pco.contentPtr();
+	if (seg_len > 0) {
+	    ndn::ParsedContentObject pco((const unsigned char *)seg_raw, seg_len);
+	    ndn::BytesPtr seg_content = pco.contentPtr();
 
-		old_data_len = offset - segment_to_size(seg_off);
-		assert(old_data_len <= old_seg_content->size());
-		old_data = (const char *)ndn::head(*old_seg_content);
+	    assert(tail < seg_content->size());
+	    const char *old_data = (const char *)ndn::head(*seg_content);
 
-		int copy_len = seg_size - old_data_len;
-		if (copy_len > size) {
-		    copy_len = size;
-		    final = true;
-		}
-
-		char *data = new char[old_data_len + copy_len];
-		if (data == NULL) {
-		    return string();
-		}
-	    
-		memcpy(data, old_data, old_data_len);
-		memcpy(data + old_data_len, buf, copy_len);
-	    
-		make_segment(path, c, ver_num, seg_off++, final, data, old_data_len + copy_len);
-		delete data;
-	    
-		if (final) {
-		    // Then we are done
-		    goto out;
-		}
-		// Else, move pointer forward
-		buf_pos += copy_len;
-		size_left -= copy_len;
+	    int copy_len = seg_size - tail;
+	    if (copy_len > size) {
+		// The data we want to write may not fill out the rest of the segment
+		copy_len = size;
+		final = true;
 	    }
+
+	    char *data = new char[tail + copy_len];
+	    if (data == NULL) {
+		return -1;
+	    }
+	    
+	    memcpy(data, old_data, tail);
+	    memcpy(data + tail, buf, copy_len);
+	    
+	    make_segment(path, c, tmp_ver_num, seg_off++, final, data, tail + copy_len);
+	    delete data;
+	    
+	    if (final) {
+		// Then we are done
+		goto out;
+	    }
+	    // Else, move pointer forward
+	    buf_pos += copy_len;
+	    size_left -= copy_len;
 	}
     }
     
@@ -256,85 +263,161 @@ string add_version(const string& path, ScopedDbConnection *c, BSONObj& file_entr
 	    final = true;
 	}
 
-	make_segment(path, c, ver_num, seg_off++, final, buf_pos, copy_len);
+	make_segment(path, c, tmp_ver_num, seg_off++, final, buf_pos, copy_len);
 	buf_pos += copy_len;
 	size_left -= copy_len;
     }
 
 out:
-    // Create new version entry
+    // Update temp version entry
     BSONArrayBuilder bab;
     for (int i = 0; i < seg_off; i++) {
 	bab.append( lexical_cast<string> (i) );
     }
-    BSONObj ver_entry = BSONObjBuilder().append("_id", path + "/" + version).append("type", version_type).append("mode", 0666)
-	.append("data", bab.arr()).append("size", (int)(offset + size)).append("final", (seg_off - 1)).obj();
+    c->conn().update(db_name, BSON("_id" << tmp_ver_path), BSON( "$set" << BSON( "data" << bab.arr() << "size" << (int)(offset + size) ) ));
 
-    // Add verion entry to database
-    c->conn().insert(db_name, ver_entry);
-
-    return version;
+    return size;
 }
 
 
-void remove_versions(const string& path, ScopedDbConnection *c)
+int truncate_temp_version(const string& path, ScopedDbConnection *c, BSONObj& file_entry, off_t length)
 {
-    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
+    int seg_off = seek_segment(length);
+
+    long long tmp_ver_num = get_temp_version(file_entry);
+    string tmp_ver = lexical_cast<string> (tmp_ver_num);
+    string tmp_ver_path = path + "/" + tmp_ver;
+
+    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << tmp_ver_path));
     if (!cursor->more()) {
-        return;
-    }
+        // *copy-on-write* strategy:
+	// If temp version is not inserted, create a new entry for the temp version.
+	// This only happens on the first truncate() after open()
+	BSONArrayBuilder bab;
 
-    BSONObj file_entry = cursor->next();
+	if (length > 0) {
+	    // Copy data from current version
+	    string curr_ver_path = path + "/" + lexical_cast<string> (get_current_version(file_entry));
+	    cursor = c->conn().query(db_name, QUERY("_id" << curr_ver_path));
+	    if (!cursor->more()) {
+		return -1;
+	    }
+	
+	    BSONObj curr_ver_entry = cursor->next();
+	    if (curr_ver_entry.getIntField("type") != version_type) {
+		return -1;
+	    }
+
+	    if (curr_ver_entry.getIntField("size") < (size_t)length) {
+		// TODO: pad zeros
+		return -1;
+	    }
+	
+	    // Copy old data before the offset
+	    int seg_len;
+	    const char *seg_raw;
+	    int data_len;
+	    const char *data;
+	    int i = 0;
+	    int tail = length;
+	    while (tail > 0) {
+		string seg_path = curr_ver_path + "/" + lexical_cast<string> (i);
+
+		cursor = c->conn().query(db_name, QUERY("_id" << seg_path));
+		if (!cursor->more()) {
+		    return -1;
+		}
+
+		BSONObj seg_entry = cursor->next();
+		if (seg_entry.getIntField("type") != segment_type) {
+		    return -1;
+		}
+
+		seg_raw = get_segment_data_raw(seg_entry, seg_len);
+
+		ndn::ParsedContentObject pco((const unsigned char *)seg_raw, seg_len);
+		ndn::BytesPtr seg_content = pco.contentPtr();
     
-    vector< BSONElement > vers = file_entry["data"].Array();
-    for (int i = 0; i < vers.size(); i++) {
-        string ver_path = path + "/" + vers[i].String();
-	remove_segments(ver_path, c);
-	c->conn().remove(db_name, QUERY("_id" << ver_path));
-    }
-}
+		data_len = (seg_content->size() > tail) ? tail : seg_content->size();
+		data = (const char *)ndn::head(*seg_content);
+		
+		make_segment(path, c, tmp_ver_num, i, false, data, data_len);
+		    
+		bab.append(i);
+		
+		tail -= data_len;
+		i++;
+	    }
+	    assert(i <= seg_off);
+	}
 
-int truncate_latest_version(const string& path, ScopedDbConnection *c, BSONObj& file_entry, off_t length)
-{
-    string version = get_latest_version_name(file_entry);
-    string ver_path = path + "/" + version;
+        // Insert temp version entry
+	BSONObj ver_entry = BSONObjBuilder().append("_id", tmp_ver_path).append("type", version_type)
+	    .append("data", bab.arr()).append("size", length).obj();
 
-    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << ver_path));
-    if (!cursor->more()) {
-        return -ENOENT;
+        // Add verion entry to database
+	c->conn().insert(db_name, ver_entry);
+    
+	return 0;
     }
     
-    BSONObj ver_entry = cursor->next();
-    if (ver_entry.getIntField("type") != version_type) {
+    BSONObj tmp_ver_entry = cursor->next();
+    if (tmp_ver_entry.getIntField("type") != version_type) {
         return -EINVAL;
     }
 
-    int mode, size;
-    get_version_info(ver_entry, mode, size);
+    int size = tmp_ver_entry.getIntField("size");
 
     if ((size_t)length == size) {
 	return 0;
     } else if ((size_t)length < size) {
 	// Truncate to length
 	int seg_end = seek_segment(length);
-	
-        // TODO: update previous segments to a newer version
 
 	// Update version size and segment list
-	c->conn().update(db_name, BSON("_id" << ver_path), BSON( "$set" << BSON( "size" << (int)length ) ));
+	c->conn().update(db_name, BSON("_id" << tmp_ver_path), BSON( "$set" << BSON( "size" << (int)length ) ));
 	BSONArrayBuilder bab;
 	for (int i = 0; i <= seg_end; i++) {
 	    bab.append( lexical_cast<string> (i) );
 	}
-	c->conn().update(db_name, BSON("_id" << ver_path), BSON( "$set" << BSON( "data" << bab.arr() ) ));
+	c->conn().update(db_name, BSON("_id" << tmp_ver_path), BSON( "$set" << BSON( "data" << bab.arr() ) ));
 
 	int tail = length - segment_to_size(seg_end);
-	truncate_segment(ver_path, c, seg_end, tail);
-	remove_segments(ver_path, c, seg_end + 1);
+	truncate_segment(tmp_ver_path, c, seg_end, tail);
+	remove_segments(tmp_ver_path, c, seg_end + 1);
 	
 	return 0;
     } else {
 	// TODO: pad with zeros
 	return -1;
+    }
+}
+
+
+void remove_version(const string& ver_path, ScopedDbConnection *c)
+{
+    remove_segments(ver_path, c);
+    c->conn().remove(db_name, QUERY("_id" << ver_path));
+}
+
+
+void remove_versions(const string& file_path, ScopedDbConnection *c)
+{
+    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << file_path));
+    if (!cursor->more()) {
+        return;
+    }
+
+    BSONObj file_entry = cursor->next();
+    long long curr_ver = get_current_version(file_entry);
+    if (curr_ver != -1) {
+	string curr_ver_path = file_path + "/" + lexical_cast<string> (curr_ver);
+	remove_version(curr_ver_path, c);
+    }
+
+    long long tmp_ver = get_temp_version(file_entry);
+    if (tmp_ver != -1) {
+	string tmp_ver_path = file_path + "/" + lexical_cast<string> (tmp_ver);
+	remove_version(tmp_ver_path, c);
     }
 }
