@@ -47,6 +47,7 @@ static void create_fuse_operations(struct fuse_operations *fuse_op)
 {
     fuse_op->getattr  = ndnfs_getattr;
     fuse_op->chmod    = ndnfs_chmod;
+    fuse_op->setxattr = ndnfs_setxattr;
     fuse_op->open     = ndnfs_open;
     fuse_op->read     = ndnfs_read;
     fuse_op->readdir  = ndnfs_readdir;

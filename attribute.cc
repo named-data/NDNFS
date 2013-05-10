@@ -84,3 +84,26 @@ int ndnfs_chmod(const char *path, mode_t mode)
 
     return 0;
 }
+
+
+// Dummy function to stop commands such as 'cp' from complaining
+int ndnfs_setxattr(const char *path, const char *name, const char *value, size_t size, int flags, uint32_t position)
+{
+    /*
+    cout << "ndnfs_setxattr: called with path " << path << ", flag " << std::dec << flags << ", position " << position << endl;
+    //cout << "ndnfs_setxattr: set attr " << name << " to " << value << endl;
+    cout << "ndnfs_setxattr: set attr " << name << endl;
+
+    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
+    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
+    if (!cursor->more()) {
+        c->done();
+        delete c;
+        return -ENOENT;
+    }
+
+    // TODO: need to escape 'name' string
+    //c->conn().update(db_name, BSON("_id" << path), BSON( "$set" << BSON( name << value ) ));
+    */
+    return 0;
+}
