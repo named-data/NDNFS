@@ -229,25 +229,8 @@ int ndnfs_unlink(const char *path)
     ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
     
     // First remove pointer in the folder that holds the file
-    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << dir_path));
-    if (!cursor->more()) {
-	c->done();
-        delete c;
-        return -EEXIST;
-    }
-    
-    BSONObj dir_entry = cursor->next();
-    vector< BSONElement > dir_data = dir_entry["data"].Array();
-    
-    BSONArrayBuilder bab;
-    for (int i = 0; i < dir_data.size(); i++) {
-        string s = dir_data[i].String();
-        if (s != file_name) {
-            bab.append(s);
-        }
-    }
-   
-    c->conn().update(db_name, BSON("_id" << dir_path), BSON( "$set" << BSON( "data" << bab.arr() << "mtime" << (int)time(0) ) ));
+    c->conn().update(db_name, BSON("_id" << dir_path), BSON( "$pull" << BSON( "data" << file_name ) ));
+    c->conn().update(db_name, BSON("_id" << dir_path), BSON( "$set" << BSON( "mtime" << (int)time(0) ) ));
     
     // Then remove all the versions under the file entry
     remove_versions(file_path, c);

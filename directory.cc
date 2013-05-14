@@ -139,26 +139,8 @@ int ndnfs_rmdir(const char *path)
     c->conn().remove(db_name, QUERY("_id" << path));
     
     // Remove pointer in the parent folder
-    // XXX: low performance!!!
-    cursor = c->conn().query(db_name, QUERY("_id" << parent_dir_path));
-    if (!cursor->more()) {
-        c->done();
-        delete c;
-        return -EEXIST;
-    }
-    
-    BSONObj parent_entry = cursor->next();
-    vector< BSONElement > parent_data = parent_entry["data"].Array();
-    
-    BSONArrayBuilder bab;
-    for (int i = 0; i < parent_data.size(); i++) {
-        string s = parent_data[i].String();
-        if (s != dir_name) {
-            bab.append(s);
-        }
-    }
-    
-    c->conn().update(db_name, BSON("_id" << parent_dir_path), BSON( "$set" << BSON( "data" << bab.arr() << "mtime" << (int)time(0) ) ));
+    c->conn().update(db_name, BSON("_id" << parent_dir_path), BSON( "$pull" << BSON( "data" << dir_name ) ));
+    c->conn().update(db_name, BSON("_id" << parent_dir_path), BSON( "$set" << BSON( "mtime" << (int)time(0) ) ));
 
     c->done();
     delete c;
