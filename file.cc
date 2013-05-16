@@ -245,7 +245,7 @@ int ndnfs_unlink(const char *path)
 
 int ndnfs_release(const char *path, struct fuse_file_info *fi)
 {
-    cout << "ndnfs_release: called with path " << path << endl;
+    cout << "ndnfs_release: called with path " << path << " and flag " << std::hex << fi->flags << endl;
 
     ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
@@ -262,20 +262,42 @@ int ndnfs_release(const char *path, struct fuse_file_info *fi)
 	return -1;
     }
 
-    long long old_ver_num = get_current_version(file_entry);
-    long long tmp_ver_num = get_temp_version(file_entry);
-    if (tmp_ver_num == -1) {
-	c->done();
-	delete c;
-	return -1;
+/*
+  In FUSE design, if the file is created with create() call,
+  the corresponding release() call always has fi->flags = 0.
+  So we need to check the current version number to tell if
+  the file is just created or opened in read only mode.
+ */
+
+    long long curr_ver_num = get_current_version(file_entry);
+    // Check open flags
+    if (((fi->flags & O_ACCMODE) != O_RDONLY) || curr_ver_num == -1) {
+        // This file is either opened with write access or just created
+        long long tmp_ver_num = get_temp_version(file_entry);
+        if (tmp_ver_num == -1) {
+	    c->done();
+	    delete c;
+	    return -1;
+	}
+	
+	string file_path(path);
+	string tmp_ver_path = file_path + "/" + lexical_cast<string> (tmp_ver_num);
+	cursor = c->conn().query(db_name, QUERY("_id" << tmp_ver_path));
+	if (!cursor->more()) {
+	    // Nothing is written into this file so the temp version does not exist
+	    // In this case we simply keep the current version as it is and reset temp version number
+	    c->conn().update(db_name, BSON("_id" << path), BSON( "$set" << BSON( "temp" << (long long)-1) ));
+	} else {
+	    // Update version number and remove old version
+	    int size = get_version_size(path, c, tmp_ver_num);
+	    c->conn().update(db_name, BSON("_id" << path), BSON( "$set" << BSON( "size" << size << "data" << tmp_ver_num << "temp" << (long long)-1) ));
+	    string old_ver_path = file_path + "/" + lexical_cast<string> (curr_ver_num);
+	    remove_version(old_ver_path, c);
+	    //c->conn().update(db_name, BSON("_id" << path), BSON( "$set" << BSON( "mtime" << (int)time(0) ) ));
+	}
     }
 
-    // Update version number and remove old version
-    int size = get_version_size(path, c, tmp_ver_num);
-    c->conn().update(db_name, BSON("_id" << path), BSON( "$set" << BSON( "size" << size << "data" << tmp_ver_num << "temp" << (long long)-1) ));
-    string old_ver_path = string(path) + "/" + lexical_cast<string> (old_ver_num);
-    remove_version(old_ver_path, c);
-    //c->conn().update(db_name, BSON("_id" << path), BSON( "$set" << BSON( "mtime" << (int)time(0) ) ));
-    
+    c->done();
+    delete c;
     return 0;
 }
