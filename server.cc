@@ -17,9 +17,10 @@
  * Author: Zhe Wen <wenzhe@cs.ucla.edu>
  */
 
-#include <ndn.cxx.h>
-#include <servermodule.h>
 #include <iostream>
+
+#include <ndn.cxx.h>
+#include "servermodule.h"
 
 using namespace std;
 
