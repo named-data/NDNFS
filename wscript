@@ -17,7 +17,7 @@ def configure(conf):
     conf.load("compiler_c compiler_cxx")
 
     if conf.options.debug:
-        conf.define ('_DEBUG', 1)
+        conf.define ('NDNFS_DEBUG', 1)
         conf.add_supported_cxxflags (cxxflags = ['-O0',
                                                  '-Wall',
                                                  '-Wno-unused-variable',

@@ -25,9 +25,11 @@ using namespace mongo;
 
 int ndnfs_open(const char *path, struct fuse_file_info *fi)
 {
+#ifdef NDNFS_DEBUG
     cout << "ndnfs_open: called with path " << path << endl;
     cout << "ndnfs_open: flag is 0x" << std::hex << fi->flags << endl;
-    
+#endif
+
     ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
     if (!cursor->more()) {
@@ -78,9 +80,11 @@ int ndnfs_open(const char *path, struct fuse_file_info *fi)
 
 int ndnfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 {
+#ifdef NDNFS_DEBUG
     cout << "ndnfs_create: called with path " << path << endl;
     cout << "ndnfs_create: create file with flag 0x" << std::hex << fi->flags << " and mode 0" << std::oct << mode << endl;
-    
+#endif
+
     string file_path(path);
     string dir_path, file_name;
     split_last_component(file_path, dir_path, file_name);
@@ -125,8 +129,10 @@ int ndnfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 
 int ndnfs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
 {
+#ifdef NDNFS_DEBUG
     cout << "ndnfs_read: called with path " << path << endl;
     cout << "ndnfs_read: start read at offset " << std::dec << offset << " with size " << size << endl;
+#endif
 
     ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
@@ -154,8 +160,10 @@ int ndnfs_read(const char *path, char *buf, size_t size, off_t offset, struct fu
 
 int ndnfs_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
 {
+#ifdef NDNFS_DEBUG
     cout << "ndnfs_write: called with path " << path << endl;
     cout << "ndnfs_write: start write at offset " << std::dec << offset << " with size " << size << endl;
+#endif
 
     string file_path(path);
     ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
@@ -191,8 +199,10 @@ int ndnfs_write(const char *path, const char *buf, size_t size, off_t offset, st
 
 int ndnfs_truncate(const char *path, off_t length)
 {
+#ifdef NDNFS_DEBUG
     cout << "ndnfs_truncate: called with path " << path << endl;
     cout << "ndnfs_truncate: truncate to length " << std::dec << length << endl;
+#endif
 
     ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
@@ -220,8 +230,10 @@ int ndnfs_truncate(const char *path, off_t length)
 
 int ndnfs_unlink(const char *path)
 {
+#ifdef NDNFS_DEBUG
     cout << "ndnfs_unlink: called with path " << path << endl;
-    
+#endif
+
     string file_path(path);
     string dir_path, file_name;
     split_last_component(file_path, dir_path, file_name);
@@ -245,7 +257,9 @@ int ndnfs_unlink(const char *path)
 
 int ndnfs_release(const char *path, struct fuse_file_info *fi)
 {
+#ifdef NDNFS_DEBUG
     cout << "ndnfs_release: called with path " << path << " and flag " << std::hex << fi->flags << endl;
+#endif
 
     ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));

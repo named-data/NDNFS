@@ -23,11 +23,12 @@ using namespace std;
 using namespace boost;
 using namespace mongo;
 
-int ndnfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
-                  off_t offset, struct fuse_file_info *fi)
+int ndnfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi)
 {
+#ifdef NDNFS_DEBUG
     cout << "ndnfs_readdir: called with path " << path << endl;
-    
+#endif    
+
     ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
     if (!cursor->more()) {
@@ -59,8 +60,10 @@ int ndnfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
 int ndnfs_mkdir(const char *path, mode_t mode)
 {
+#ifdef NDNFS_DEBUG
     cout << "ndnfs_mkdir: called with path " << path << endl;
     cout << "ndnfs_mkdir: make directory with mode 0" << std::oct << mode << endl;
+#endif
 
     string dir_path, dir_name;
     split_last_component(path, dir_path, dir_name);
@@ -105,8 +108,10 @@ int ndnfs_mkdir(const char *path, mode_t mode)
  */
 int ndnfs_rmdir(const char *path)
 {
+#ifdef NDNFS_DEBUG
     cout << "ndnfs_rmdir: called with path " << path << endl;
-    
+#endif
+
     if (strcmp(path, "/") == 0) {
         // Cannot remove root dir.
         // This should not happen in the real world.

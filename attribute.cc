@@ -25,8 +25,10 @@ using namespace mongo;
 
 int ndnfs_getattr(const char *path, struct stat *stbuf)
 {
+#ifdef NDNFS_DEBUG
     cout << "ndnfs_getattr: called with path " << path << endl;
-    
+#endif
+
     memset(stbuf, 0, sizeof(struct stat));
 
     ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
@@ -69,8 +71,10 @@ int ndnfs_getattr(const char *path, struct stat *stbuf)
 
 int ndnfs_chmod(const char *path, mode_t mode)
 {
+#ifdef NDNFS_DEBUG
     cout << "ndnfs_chmod: called with path " << path << endl;
     cout << "ndnfs_chmod: change mode to 0" << std::oct << mode << endl;
+#endif
 
     ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
