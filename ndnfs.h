@@ -53,6 +53,7 @@ extern const int seg_size_shift;
 extern int user_id;
 extern int group_id;
 
+//#define NDNFS_DEBUG
 
 inline int split_last_component(const std::string &path, std::string &prefix, std::string &name)
 {
