@@ -1,33 +1,35 @@
 CXX = g++
 
-TARGET = server
+CFLAGS = -c -Wall
 
-FLAGS = -c -Wall
+LDFLAGS =
 
 # lbooster lmongoclient lboost_thread lboost_filesystem lboost_program_options
 # lboost_system
-LIBRARIES = -lndn.cxx \
+LIBRARIES =	-pthread \
+			-lndn.cxx \
 			-lmongoclient \
-			-lboost_thread-mt \
+			-lboost_thread \
 			-lboost_filesystem \
 			-lboost_program_options \
 			-lboost_system
 INCLUDE_PATHS = -I/usr/local/include \
-				-I/usr/local/include/boost \
-				-I/usr/local/include/mongo \
-				-I/home/nathanw/devel/_include
+				-I/usr/include/boost \
+				-I/usr/local/include/mongo
 LIBRARY_PATHS = -L/usr/lib \
 				-L/usr/local/lib
 
-SOURCES = servermodule.cc server.cc
+SOURCES = server.cc servermodule.cc 
 
-OBJECTS = $(SOURCES:.cpp=.o)
+OBJECTS = $(SOURCES:.cc=.o)
+EXECUTABLE = server
 
-$(TARGET): $(OBJECTS)
-	    $(CXX) $(OBJECTS) $(LIBRARY_PATHS) $(LIBRARIES) -o $(TARGET)
+all: $(SOURCES) $(EXECUTABLE)
 
-%.o: %.cpp
-	    $(CXX) $(FLAGS) $(INCLUDE_PATHS) $(LIBRARY_PATHS) $(LIBRARIES) $< -o $@
+$(EXECUTABLE): $(OBJECTS)
+	    $(CXX) $(LDFLAGS) $(OBJECTS) $(LIBRARY_PATHS) $(LIBRARIES) -o $@
+.cc.o:
+	$(CXX) $(CFLAGS) $(INCLUDE_PATHS) $(LIBRARY_PATHS) $(LIBRARIES) $< -o $@ 
 
 clean:
-	    rm -f $(TARGET) $(OBJECTS)
+	    rm -f $(EXECUTABLE) $(OBJECTS)

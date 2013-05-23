@@ -39,7 +39,7 @@ void OnInterest(ndn::InterestPtr interest);
 
 // ndn-ndnfs name converter. converting name from ndn::Name representation to
 // string representation.
-const string ndnName2string(ndn::Name name);
+const string ndnName2String(ndn::Name name);
 
 // ndn name selector. deriving NDNFS name that specifies a content object from
 // the NDN name given in an interest. return the NDNFS name on success; NULL 

@@ -27,7 +27,7 @@
 #include <mongo/client/dbclient.h>
 //#include <boost/function.hpp>
 //#include <boost/bind.hpp>
-//#include <boost/lexical_cast.hpp>
+#include <boost/lexical_cast.hpp>
 
 #include "servermodule.h"
 
@@ -52,15 +52,22 @@ void OnInterest(ndn::InterestPtr interest) {
 
 // ndn-ndnfs name converter. converting name from ndn::Name representation to
 // string representation.
-const string ndnName2string(ndn::Name name) {
+const string ndnName2String(ndn::Name name) {
 	string str_name("");
 	string slash("/");
 
-	ndn::Name::iterator iter = name.begin();
+	ndn::Name::const_iterator iter = name.begin();
 	for (; iter != name.end(); iter++) {
-		cout << "ndnName2ndnfsName(): interest name component: " << ndn::Name::asString(*iter) << endl;
-		str_name += (slash + ndn::Name::asString(*iter));
+		string comp = ndn::Name::asUriString(*iter);
+		cout << "ndnName2String(): interest name component: " << comp << endl;
+		if (comp[0] == '%') {
+			ostringstream os;
+			os << ndn::Name::asNumber(*iter);
+			comp = os.str();
+		}
+		str_name += (slash + comp);
 	}
+	cout << "ndnName2String(): interest name: " << str_name << endl;
 
 	return str_name;
 }
@@ -72,7 +79,7 @@ const string ndnName2string(ndn::Name name) {
 // content object name that matches what the interest requires.
 const string NameSelector(ndn::InterestPtr interest) {
 	string ndn_name("");
-	ndn_name = ndnName2string(interest->getName());
+	ndn_name = ndnName2String(interest->getName());
 
 	string ndnfs_name("");
 	// TODO: derive ndnfs name from above string style ndn_name
@@ -97,42 +104,64 @@ const string NameSelector(ndn::InterestPtr interest) {
 	return ndnfs_name;
 }
 
+
+struct BSONElementLessThan {
+	inline bool operator()(const mongo::BSONElement a, const mongo::BSONElement b) {
+		if (a.type() == mongo::NumberInt)
+			return (a.Int() < b.Int());
+		else
+			return (a.String() < b.String());
+	}
+};
+
 // search mongo db specified by c from entry specified by cursor for 
 // possible matches. whenever finding a possible match, check if it suffices
 // the selectors.
 const string Search4PossibleMatch_Rec(mongo::ScopedDbConnection* c, 
 		mongo::BSONObj current_entry, 
 		ndn::InterestPtr interest) {
-	string ndnfs_name("");
+	string original_name(current_entry.getStringField("_id"));
 	// ASSERT: for each _id specified as absolute path, there is only 1 entry
 	// TODO: check current entry. if it is a possible match, check for 
 	// selectors also to see if it can be returned.
-//	boost::function<bool (mongo::BSONObj, ndn::InterestPtr)> check_selectors;
-//	check_selectors = boost::bind(CheckSelectors, current_entry, interest);
 	// now check_selectors() can be called directly to check current entry.
 
-	cout << "Search4PossibleMatch_Rec(): now searching: " << current_entry["_id"].String() << endl;
-
+	cout << "Search4PossibleMatch_Rec(): now searching: " << original_name << endl;
 	mongo::BSONObj next_entry;
 	vector<mongo::BSONElement> subdir_list;
-	vector<mongo::BSONElement>::iterator iter;
 	// TODO: traverse this entire directory recursively
-	switch (current_entry["type"].Int()) {
+	assert(current_entry.hasField("type"));
+	int type = current_entry.getIntField("type"); // error calling Int()
+	int i = 0;
+	string ndnfs_name("");
+	switch (type) {
 		case DB_ENTRY_TYPE_DIR:
 		case DB_ENTRY_TYPE_FIL:
 		case DB_ENTRY_TYPE_VER:
 			subdir_list = current_entry["data"].Array();
-			for (iter = subdir_list.begin(); iter != subdir_list.end(); iter++) {
-				string current_name(ndnfs_name);
-				if (current_entry["_id"].String() == "/") {
+			// do sort here
+			sort(subdir_list.begin(), subdir_list.end(), BSONElementLessThan());
+			for (i = 0; i < subdir_list.size(); i++) {
+				string current_name(original_name);
+				if (current_name[current_name.length()-1] == '/') {
 					// if searching under root directory, construct next level name
 					// by simply appending
-					current_name += (*iter).String();
+					if (type == DB_ENTRY_TYPE_DIR)
+						current_name += subdir_list[i].String();
+					else 
+						current_name += 
+							boost::lexical_cast<string>(subdir_list[i].Int());
 				}
 				else {
 					// if searching under other directory, construct next level
 					// name by appending separator (/) and subdir/file name
-					current_name += ("/" + (*iter).String());
+					current_name += "/";
+					if (type == DB_ENTRY_TYPE_DIR)
+						current_name += subdir_list[i].String();
+					else {
+						current_name += 
+							boost::lexical_cast<string>(subdir_list[i].Int());
+					}
 				}
 				auto_ptr<mongo::DBClientCursor> current_cursor = 
 					c->conn().query(db_name, QUERY("_id" << current_name));
@@ -146,12 +175,12 @@ const string Search4PossibleMatch_Rec(mongo::ScopedDbConnection* c,
 			break;
 		case DB_ENTRY_TYPE_SEG:
 			if (CheckSelectors(current_entry, interest)) {
-				ndnfs_name = current_entry["_id"].String();
-				cout << "Search4PossibleMatch_Rec(): found a match: " << ndnfs_name << endl;
+				ndnfs_name = current_entry.getStringField("_id");
+				cout << "Search4PossibleMatch_Rec(): find a match: " << ndnfs_name << endl;
 				return ndnfs_name;
 			}
 			break;
-		default: cerr << "Search4PossibleMatch_Rec(): unidentified entry type: " << current_entry["type"].Int() << endl;
+		default: cerr << "Search4PossibleMatch_Rec(): unidentified entry type: " << current_entry.getIntField("type") << endl;
 	}
 		
 	// TODO: if any match is found, return its name (content object name)
@@ -163,9 +192,11 @@ const string Search4PossibleMatch_Rec(mongo::ScopedDbConnection* c,
 // a segment entry can a match be found. skip checking if cursor points to 
 // some other type entry.
 bool CheckSelectors(mongo::BSONObj current_entry, ndn::InterestPtr interest) {
-	int entry_type = current_entry["type"].Int();
+	assert(current_entry.hasField("type"));
+	int entry_type = current_entry.getIntField("type");
 
 	// we only check segment entries to see if it suffices the selectors
+	cout << "CheckSelectors(): checking assertion: is segment type" << endl;
 	assert(entry_type == DB_ENTRY_TYPE_SEG);
 
 	uint32_t min_suffix_components = ndn::Interest::ncomps;
