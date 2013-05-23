@@ -27,6 +27,10 @@ int ndnfs_getattr(const char *path, struct stat *stbuf);
 
 int ndnfs_chmod(const char *path, mode_t mode);
 
+#ifdef NDNFS_OSXFUSE
 int ndnfs_setxattr(const char *path, const char *name, const char *value, size_t size, int flags, uint32_t position);
+#elif NDNFS_FUSE
+int ndnfs_setxattr(const char *path, const char *name, const char *value, size_t size, int flags);
+#endif
 
 #endif

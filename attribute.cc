@@ -91,7 +91,12 @@ int ndnfs_chmod(const char *path, mode_t mode)
 
 
 // Dummy function to stop commands such as 'cp' from complaining
+
+#ifdef NDNFS_OSXFUSE
 int ndnfs_setxattr(const char *path, const char *name, const char *value, size_t size, int flags, uint32_t position)
+#elif NDNFS_FUSE
+int ndnfs_setxattr(const char *path, const char *name, const char *value, size_t size, int flags)
+#endif
 {
     /*
     cout << "ndnfs_setxattr: called with path " << path << ", flag " << std::dec << flags << ", position " << position << endl;

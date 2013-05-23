@@ -33,14 +33,18 @@ def configure(conf):
 
     try:
         conf.check_cfg(package='osxfuse', args=['--cflags', '--libs'], uselib_store='FUSE', mandatory=True)
+        conf.define("NDNFS_OSXFUSE", 1)
     except:
         try:
             conf.check_cfg(package='fuse', args=['--cflags', '--libs'], uselib_store='FUSE', mandatory=True)
+            conf.define("NDNFS_FUSE", 1)
         except:
             conf.fatal ("Cannot find FUSE libraries")
 
     # if Utils.unversioned_sys_platform () == "darwin":
     #     pass
+
+    conf.write_config_header('config.h')
 
     if not conf.check_cfg(package='openssl', args=['--cflags', '--libs'], uselib_store='SSL', mandatory=False):
         libcrypto = conf.check_cc(lib='crypto',
