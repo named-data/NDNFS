@@ -56,10 +56,13 @@ Search4PossibleMatch_Rec(
 		ndn::InterestPtr interest);
 
 // check if the directory/content object specified by cursor suffices 
-// selectors specified by interest. note if and only if cursor points to 
-// a segment entry can a match be found. skip checking if cursor points to 
-// some other type entry.
-bool CheckSelectors(mongo::BSONObj current_entry, ndn::InterestPtr interest);
+// the min/max suffix components selector specified in interest. 
+// note that if and only if cursor points to a segment entry can a match be 
+// found. skip checking if cursor points to some other type entry.
+bool CheckSuffix(mongo::BSONObj current_entry, ndn::InterestPtr interest);
 
+// fetch raw data as binary from the segment specified by ndnfs_name
+// number of bytes fetch stored in len
+const char* FetchData(string ndnfs_name, int& len);
 
 #endif // __SERVER_MODULE_H__

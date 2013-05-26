@@ -33,8 +33,10 @@
 
 using namespace std;
 
+extern ndn::Wrapper handler;
 extern const char* db_name;
 extern mongo::ScopedDbConnection* c;
+extern bool child_selector_set;
 
 // callbalck on receiving incoming interest.
 // respond proper content object and comsumes the interest. or simple ignore
@@ -44,10 +46,28 @@ void OnInterest(ndn::InterestPtr interest) {
 	// name that can be fetched in NDNFS. this may be done by following the
 	// selector rules.
 	// 2.call NDNFS API to fetch content object
-	// 3.publish content object and consume the interest	
+	// 3.publish content object and consume the interest
+	cout << "------------------------------------------------------------" << endl;
 	cout << "OnInterest(): interest name: " << interest->getName() << endl;
 
-	const string ndnfsName = NameSelector(interest);
+	const string ndnfs_name = NameSelector(interest);
+
+	// TODO: fetch content object specified by ndnfs_name and return it
+	// to comsume the interest
+	if (ndnfs_name.empty()) {
+		cout << "OnInterest(): no match found for prefix: " << interest->getName() << endl;
+	}
+	else {
+		cout << "OnInterest(): a match has been found for prefix: " << interest->getName() << endl;
+		cout << "OnInterest(): fetching content object ..." << endl;
+		// TODO: fetch the content object from mongo db
+		int len;
+		const char* data = FetchData(ndnfs_name, len);
+		handler.publishData(interest->getName(), data, len);
+		cout << "OnInterest(): content object returned and interest consumed" << endl;
+	}
+	cout << "OnInterest(): Done" << endl;
+	cout << "------------------------------------------------------------" << endl;
 }
 
 // ndn-ndnfs name converter. converting name from ndn::Name representation to
@@ -59,7 +79,7 @@ const string ndnName2String(ndn::Name name) {
 	ndn::Name::const_iterator iter = name.begin();
 	for (; iter != name.end(); iter++) {
 		string comp = ndn::Name::asUriString(*iter);
-		cout << "ndnName2String(): interest name component: " << comp << endl;
+		// cout << "ndnName2String(): interest name component: " << comp << endl;
 		if (comp[0] == '%') {
 			ostringstream os;
 			os << ndn::Name::asNumber(*iter);
@@ -67,7 +87,7 @@ const string ndnName2String(ndn::Name name) {
 		}
 		str_name += (slash + comp);
 	}
-	cout << "ndnName2String(): interest name: " << str_name << endl;
+	// cout << "ndnName2String(): interest name: " << str_name << endl;
 
 	return str_name;
 }
@@ -95,7 +115,8 @@ const string NameSelector(ndn::InterestPtr interest) {
 	mongo::BSONObj entry = cursor->next();
 	// search for a match in db specified by c starting from entry 
 	// specified by cursor.
-	cout << "NameSelector(): searching for: " << ndn_name << "..." << endl;
+	cout << "NameSelector(): searching for: " << ndn_name << endl;
+	child_selector_set = false;
 	ndnfs_name = Search4PossibleMatch_Rec(c, entry, interest);
 
 	if (ndnfs_name.empty()) {
@@ -122,17 +143,20 @@ const string Search4PossibleMatch_Rec(mongo::ScopedDbConnection* c,
 		ndn::InterestPtr interest) {
 	string original_name(current_entry.getStringField("_id"));
 	// ASSERT: for each _id specified as absolute path, there is only 1 entry
-	// TODO: check current entry. if it is a possible match, check for 
+	// check current entry. if it is a possible match, check for 
 	// selectors also to see if it can be returned.
 	// now check_selectors() can be called directly to check current entry.
 
 	cout << "Search4PossibleMatch_Rec(): now searching: " << original_name << endl;
 	mongo::BSONObj next_entry;
 	vector<mongo::BSONElement> subdir_list;
-	// TODO: traverse this entire directory recursively
+	// traverse this entire directory recursively
 	assert(current_entry.hasField("type"));
 	int type = current_entry.getIntField("type"); // error calling Int()
-	int i = 0;
+	int first_index = 0;
+	int last_index = 0;
+	int current_index;
+	uint8_t child_selector;
 	string ndnfs_name("");
 	switch (type) {
 		case DB_ENTRY_TYPE_DIR:
@@ -141,26 +165,64 @@ const string Search4PossibleMatch_Rec(mongo::ScopedDbConnection* c,
 			subdir_list = current_entry["data"].Array();
 			// do sort here
 			sort(subdir_list.begin(), subdir_list.end(), BSONElementLessThan());
-			for (i = 0; i < subdir_list.size(); i++) {
+			// childeselector check. use global variable child_selector_set to 
+			// guarantee that the selector is applied to first level name after
+			// prefix only
+			// TODO: canonical ccnx ordering???
+			first_index = 0;
+			last_index = subdir_list.size();
+			// TODO: the following function returns nothing and the child 
+			// selector switch() always goes to CHILD_LEFT
+			child_selector = interest->getChildSelector();
+			if (!child_selector_set && child_selector) {
+				cout << "Search4PossibleMatch_Rec(): checking ChildSelector" << child_selector << endl;
+				child_selector_set = true;
+				switch (child_selector) {
+					case ndn::Interest::CHILD_LEFT:	// CHILD_LEFT
+						first_index = 0;
+						last_index = 1;
+						cout << "in CHILD_LEFT: " << first_index << " " << last_index << endl;
+						break;
+					case ndn::Interest::CHILD_RIGHT:	// CHILD_RIGHT
+						first_index = subdir_list.size() - 1;
+						last_index = subdir_list.size();
+						cout << "in CHILD_RIGHT: " << first_index << " " << last_index << endl;
+						break;
+					case ndn::Interest::CHILD_DEFAULT:	// CHILD_DEFAULT
+						first_index = 0;
+						last_index = subdir_list.size();
+						cout << "in CHILD_DEFAULT: " << first_index << " " << last_index << endl;
+						break;
+					default:
+						cerr << "Search4PossibleMatch_Rec(): unidentified child selector" << endl;
+						cerr << "Search4PossibleMatch_Rec(): use default settings" << endl;
+						first_index = 0;
+						last_index = subdir_list.size();
+						cout << "in default: " << first_index << " " << last_index << endl;
+				}
+			}
+			for (current_index = first_index; 
+				 current_index < last_index; 
+				 current_index++) {
 				string current_name(original_name);
 				if (current_name[current_name.length()-1] == '/') {
 					// if searching under root directory, construct next level name
 					// by simply appending
 					if (type == DB_ENTRY_TYPE_DIR)
-						current_name += subdir_list[i].String();
+						current_name += subdir_list[current_index].String();
 					else 
 						current_name += 
-							boost::lexical_cast<string>(subdir_list[i].Int());
+							boost::lexical_cast<string>(subdir_list[current_index].Int());
 				}
 				else {
 					// if searching under other directory, construct next level
 					// name by appending separator (/) and subdir/file name
 					current_name += "/";
 					if (type == DB_ENTRY_TYPE_DIR)
-						current_name += subdir_list[i].String();
+						current_name += subdir_list[current_index].String();
 					else {
 						current_name += 
-							boost::lexical_cast<string>(subdir_list[i].Int());
+							boost::lexical_cast<string>(subdir_list[current_index].Int());
 					}
 				}
 				auto_ptr<mongo::DBClientCursor> current_cursor = 
@@ -174,16 +236,16 @@ const string Search4PossibleMatch_Rec(mongo::ScopedDbConnection* c,
 			}
 			break;
 		case DB_ENTRY_TYPE_SEG:
-			if (CheckSelectors(current_entry, interest)) {
+			if (CheckSuffix(current_entry, interest)) {
 				ndnfs_name = current_entry.getStringField("_id");
 				cout << "Search4PossibleMatch_Rec(): find a match: " << ndnfs_name << endl;
 				return ndnfs_name;
 			}
 			break;
-		default: cerr << "Search4PossibleMatch_Rec(): unidentified entry type: " << current_entry.getIntField("type") << endl;
+		default: 
+			cerr << "Search4PossibleMatch_Rec(): unidentified entry type: " << current_entry.getIntField("type") << endl;
 	}
 		
-	// TODO: if any match is found, return its name (content object name)
 	return ndnfs_name;
 }
 
@@ -191,30 +253,66 @@ const string Search4PossibleMatch_Rec(mongo::ScopedDbConnection* c,
 // selectors specified by interest. note if and only if cursor points to 
 // a segment entry can a match be found. skip checking if cursor points to 
 // some other type entry.
-bool CheckSelectors(mongo::BSONObj current_entry, ndn::InterestPtr interest) {
+bool CheckSuffix(mongo::BSONObj current_entry, ndn::InterestPtr interest) {
 	assert(current_entry.hasField("type"));
+	cout << "CheckSuffix(): checking min/maxSuffixComponents" << endl;
 	int entry_type = current_entry.getIntField("type");
 
 	// we only check segment entries to see if it suffices the selectors
-	cout << "CheckSelectors(): checking assertion: is segment type" << endl;
+	// cout << "CheckSelectors(): checking assertion: is segment type" << endl;
 	assert(entry_type == DB_ENTRY_TYPE_SEG);
 
-	uint32_t min_suffix_components = ndn::Interest::ncomps;
-	uint32_t max_suffix_components = ndn::Interest::ncomps;
+	// min/max suffix components
+	uint32_t min_suffix_components = interest->getMinSuffixComponents();
+	uint32_t max_suffix_components = interest->getMaxSuffixComponents();
+	cout << "CheckSuffix(): MinSuffixComponents set to: " << min_suffix_components << endl;
+	cout << "CheckSuffix(): MaxSuffixComponents set to: " << max_suffix_components << endl;
 
-	// minSuffixComponents
-	if (interest->getMinSuffixComponents() != ndn::Interest::ncomps) {
-		cout << "NameSelector(): MinSuffixComponents set to: " << min_suffix_components << endl;
-		min_suffix_components = interest->getMinSuffixComponents();
+	// do suffix components check
+	uint32_t prefix_len = interest->getName().size();
+	string match = current_entry.getStringField("_id");
+	uint32_t match_len = ndn::Name(match).size();
+	// digest considered one component implicitly
+	uint32_t suffix_len = match_len - prefix_len + 1;
+	if (max_suffix_components != ndn::Interest::ncomps &&
+		suffix_len > max_suffix_components) {
+		cout << "CheckSuffix(): max suffix mismatch" << endl;
+		return false;
 	}
-	else min_suffix_components = 0;
-	// maxSuffixComponents
-	if (interest->getMaxSuffixComponents() != ndn::Interest::ncomps) {
-		cout << "NameSelector(): MaxSuffixComponents set to: " << max_suffix_components << endl;
+	if (min_suffix_components != ndn::Interest::ncomps &&
+		suffix_len < min_suffix_components) {
+		cout << "CheckSuffix(): min suffix mismatch" << endl;
+		return false;
 	}
-	else max_suffix_components = SERVERMODULE_INF;
+
 	// TODO: publisherPublicKeyDigest
+	// related implementation not available currently in lib ccnx-cpp
 	// TODO: exclude
-	
-	return false; // REPLACE THIS
+	// related implementation not available currently in lib ccnx-cpp
+
+	return true;
+}
+
+// fetch raw data as binary from the segment specified by ndnfs_name
+// number of bytes fetch stored in len
+const char* FetchData(string ndnfs_name, int& len) {
+	auto_ptr<mongo::DBClientCursor> cursor = 
+	c->conn().query(db_name, QUERY("_id" << ndnfs_name));
+	if (!cursor->more()) {
+		// query failed, no entry found
+		cout << "FetchData(): error locating data: " << ndnfs_name << endl;
+		return NULL;
+	}
+
+	mongo::BSONObj entry = cursor->next();
+	assert(entry.getIntField("type") == DB_ENTRY_TYPE_SEG);
+	assert(entry.hasField("size"));
+	if (entry.getIntField("size") == 0) {
+		len = 0;
+		return NULL;
+	}
+	else {
+		len = entry.getIntField("size");
+		return entry.getField("data").binData(len);
+	}
 }

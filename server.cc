@@ -26,6 +26,7 @@ using namespace std;
 
 const char* db_name = "ndnfs.root";
 mongo::ScopedDbConnection* c;
+bool child_selector_set;
 
 // create a global handler
 ndn::Wrapper handler;
