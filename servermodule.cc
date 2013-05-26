@@ -17,7 +17,7 @@
  * Author: Zhe Wen <wenzhe@cs.ucla.edu>
  */
 
-#define SERVERMODULE_INF	100
+// #define DEBUG
 
 #include <iostream>
 #include <string>
@@ -62,8 +62,15 @@ void OnInterest(ndn::InterestPtr interest) {
 		cout << "OnInterest(): fetching content object ..." << endl;
 		// TODO: fetch the content object from mongo db
 		int len;
+		/**********************************************
+		 * use this part to fecth data as binary
 		const char* data = FetchData(ndnfs_name, len);
 		handler.publishData(interest->getName(), data, len);
+		***********************************************/
+		// test example: string data
+		string string_data = FetchStringData(ndnfs_name, len);
+		cout << "OnInterest(): string data: " << string_data << endl;
+		handler.publishData(interest->getName(), string_data.c_str(), len);
 		cout << "OnInterest(): content object returned and interest consumed" << endl;
 	}
 	cout << "OnInterest(): Done" << endl;
@@ -108,19 +115,25 @@ const string NameSelector(ndn::InterestPtr interest) {
 		c->conn().query(db_name, QUERY("_id" << ndn_name));
 	if (!cursor->more()) {
 		// query failed, no entry found
+#ifdef DEBUG
 		cout << "NameSelector(): no such prefix/name found in ndnfs: " << ndn_name << endl;
+#endif
 		return string("");
 	}
 
 	mongo::BSONObj entry = cursor->next();
 	// search for a match in db specified by c starting from entry 
 	// specified by cursor.
+#ifdef DEBUG
 	cout << "NameSelector(): searching for: " << ndn_name << endl;
+#endif
 	child_selector_set = false;
 	ndnfs_name = Search4PossibleMatch_Rec(c, entry, interest);
 
 	if (ndnfs_name.empty()) {
+#ifdef DEBUG
 		cout << "NameSelector(): no match found for: " << ndn_name << endl;
+#endif
 	}
 	return ndnfs_name;
 }
@@ -147,7 +160,9 @@ const string Search4PossibleMatch_Rec(mongo::ScopedDbConnection* c,
 	// selectors also to see if it can be returned.
 	// now check_selectors() can be called directly to check current entry.
 
+#ifdef DEBUG
 	cout << "Search4PossibleMatch_Rec(): now searching: " << original_name << endl;
+#endif
 	mongo::BSONObj next_entry;
 	vector<mongo::BSONElement> subdir_list;
 	// traverse this entire directory recursively
@@ -175,30 +190,28 @@ const string Search4PossibleMatch_Rec(mongo::ScopedDbConnection* c,
 			// selector switch() always goes to CHILD_LEFT
 			child_selector = interest->getChildSelector();
 			if (!child_selector_set && child_selector) {
+#ifdef DEBUG
 				cout << "Search4PossibleMatch_Rec(): checking ChildSelector" << child_selector << endl;
+#endif
 				child_selector_set = true;
 				switch (child_selector) {
 					case ndn::Interest::CHILD_LEFT:	// CHILD_LEFT
 						first_index = 0;
 						last_index = 1;
-						cout << "in CHILD_LEFT: " << first_index << " " << last_index << endl;
 						break;
 					case ndn::Interest::CHILD_RIGHT:	// CHILD_RIGHT
 						first_index = subdir_list.size() - 1;
 						last_index = subdir_list.size();
-						cout << "in CHILD_RIGHT: " << first_index << " " << last_index << endl;
 						break;
 					case ndn::Interest::CHILD_DEFAULT:	// CHILD_DEFAULT
 						first_index = 0;
 						last_index = subdir_list.size();
-						cout << "in CHILD_DEFAULT: " << first_index << " " << last_index << endl;
 						break;
 					default:
 						cerr << "Search4PossibleMatch_Rec(): unidentified child selector" << endl;
 						cerr << "Search4PossibleMatch_Rec(): use default settings" << endl;
 						first_index = 0;
 						last_index = subdir_list.size();
-						cout << "in default: " << first_index << " " << last_index << endl;
 				}
 			}
 			for (current_index = first_index; 
@@ -238,7 +251,9 @@ const string Search4PossibleMatch_Rec(mongo::ScopedDbConnection* c,
 		case DB_ENTRY_TYPE_SEG:
 			if (CheckSuffix(current_entry, interest)) {
 				ndnfs_name = current_entry.getStringField("_id");
+#ifdef DEBUG
 				cout << "Search4PossibleMatch_Rec(): find a match: " << ndnfs_name << endl;
+#endif
 				return ndnfs_name;
 			}
 			break;
@@ -255,7 +270,9 @@ const string Search4PossibleMatch_Rec(mongo::ScopedDbConnection* c,
 // some other type entry.
 bool CheckSuffix(mongo::BSONObj current_entry, ndn::InterestPtr interest) {
 	assert(current_entry.hasField("type"));
+#ifdef DEBUG
 	cout << "CheckSuffix(): checking min/maxSuffixComponents" << endl;
+#endif
 	int entry_type = current_entry.getIntField("type");
 
 	// we only check segment entries to see if it suffices the selectors
@@ -265,8 +282,10 @@ bool CheckSuffix(mongo::BSONObj current_entry, ndn::InterestPtr interest) {
 	// min/max suffix components
 	uint32_t min_suffix_components = interest->getMinSuffixComponents();
 	uint32_t max_suffix_components = interest->getMaxSuffixComponents();
+#ifdef DEBUG
 	cout << "CheckSuffix(): MinSuffixComponents set to: " << min_suffix_components << endl;
 	cout << "CheckSuffix(): MaxSuffixComponents set to: " << max_suffix_components << endl;
+#endif
 
 	// do suffix components check
 	uint32_t prefix_len = interest->getName().size();
@@ -276,12 +295,16 @@ bool CheckSuffix(mongo::BSONObj current_entry, ndn::InterestPtr interest) {
 	uint32_t suffix_len = match_len - prefix_len + 1;
 	if (max_suffix_components != ndn::Interest::ncomps &&
 		suffix_len > max_suffix_components) {
+#ifdef DEBUG
 		cout << "CheckSuffix(): max suffix mismatch" << endl;
+#endif
 		return false;
 	}
 	if (min_suffix_components != ndn::Interest::ncomps &&
 		suffix_len < min_suffix_components) {
+#ifdef DEBUG
 		cout << "CheckSuffix(): min suffix mismatch" << endl;
+#endif
 		return false;
 	}
 
@@ -300,7 +323,7 @@ const char* FetchData(string ndnfs_name, int& len) {
 	c->conn().query(db_name, QUERY("_id" << ndnfs_name));
 	if (!cursor->more()) {
 		// query failed, no entry found
-		cout << "FetchData(): error locating data: " << ndnfs_name << endl;
+		cerr << "FetchData(): error locating data: " << ndnfs_name << endl;
 		return NULL;
 	}
 
@@ -315,4 +338,20 @@ const char* FetchData(string ndnfs_name, int& len) {
 		len = entry.getIntField("size");
 		return entry.getField("data").binData(len);
 	}
+}
+
+// fetch data as string from the segment specified by ndnfs_name
+string FetchStringData(string ndnfs_name, int& len) {
+	auto_ptr<mongo::DBClientCursor> cursor = 
+	c->conn().query(db_name, QUERY("_id" << ndnfs_name));
+	if (!cursor->more()) {
+		// query failed, no entry found
+		cerr << "FetchStringData(): error locating data: " << ndnfs_name << endl;
+		return NULL;
+	}
+
+	mongo::BSONObj entry = cursor->next();
+	assert(entry.getIntField("type") == DB_ENTRY_TYPE_SEG);
+	len = strlen(entry.getStringField("data")) + 1; // count tail NULL in
+	return entry.getStringField("data");
 }

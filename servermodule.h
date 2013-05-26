@@ -65,4 +65,7 @@ bool CheckSuffix(mongo::BSONObj current_entry, ndn::InterestPtr interest);
 // number of bytes fetch stored in len
 const char* FetchData(string ndnfs_name, int& len);
 
+// fetch data as string from the segment specified by ndnfs_name
+string FetchStringData(string ndnfs_name, int& len);
+	
 #endif // __SERVER_MODULE_H__
