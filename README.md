@@ -22,3 +22,10 @@ Server Module for NDNFS - network interaction
 Developed based on ccnx, ccnx-cpp, and mongoDB
 
 Use make to build project instead of waf
+
+supported name selectors:
+	minSuffixComponents
+	maxSuffixComponents
+	childSelector
+
+client.cc constructs some example interests for test purpose
