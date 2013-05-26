@@ -47,20 +47,19 @@ void OnInterest(ndn::InterestPtr interest) {
 	// selector rules.
 	// 2.call NDNFS API to fetch content object
 	// 3.publish content object and consume the interest
-	cout << "------------------------------------------------------------" << endl;
+	static int interest_cnt = 0;
+	cout << interest_cnt++ << "------------------------------------------" << endl;
 	cout << "OnInterest(): interest name: " << interest->getName() << endl;
 
 	const string ndnfs_name = NameSelector(interest);
 
-	// TODO: fetch content object specified by ndnfs_name and return it
-	// to comsume the interest
 	if (ndnfs_name.empty()) {
 		cout << "OnInterest(): no match found for prefix: " << interest->getName() << endl;
 	}
 	else {
 		cout << "OnInterest(): a match has been found for prefix: " << interest->getName() << endl;
 		cout << "OnInterest(): fetching content object ..." << endl;
-		// TODO: fetch the content object from mongo db
+		// fetch the content object from mongo db
 		int len;
 		/**********************************************
 		 * use this part to fecth data as binary
@@ -70,6 +69,7 @@ void OnInterest(ndn::InterestPtr interest) {
 		// test example: string data
 		string string_data = FetchStringData(ndnfs_name, len);
 		cout << "OnInterest(): string data: " << string_data << endl;
+		// TODO: seems that client receives nothing ...
 		handler.publishData(interest->getName(), string_data.c_str(), len);
 		cout << "OnInterest(): content object returned and interest consumed" << endl;
 	}
@@ -109,7 +109,7 @@ const string NameSelector(ndn::InterestPtr interest) {
 	ndn_name = ndnName2String(interest->getName());
 
 	string ndnfs_name("");
-	// TODO: derive ndnfs name from above string style ndn_name
+	// derive ndnfs name from above string style ndn_name
 	// connect to db and mount the directory represented by ndn_name
 	auto_ptr<mongo::DBClientCursor> cursor = 
 		c->conn().query(db_name, QUERY("_id" << ndn_name));
@@ -308,11 +308,6 @@ bool CheckSuffix(mongo::BSONObj current_entry, ndn::InterestPtr interest) {
 		return false;
 	}
 
-	// TODO: publisherPublicKeyDigest
-	// related implementation not available currently in lib ccnx-cpp
-	// TODO: exclude
-	// related implementation not available currently in lib ccnx-cpp
-
 	return true;
 }
 
@@ -355,3 +350,10 @@ string FetchStringData(string ndnfs_name, int& len) {
 	len = strlen(entry.getStringField("data")) + 1; // count tail NULL in
 	return entry.getStringField("data");
 }
+
+// TODO: publisherPublicKeyDigest
+// related implementation not available currently in lib ccnx-cpp
+// TODO: exclude
+// related implementation not available currently in lib ccnx-cpp
+
+
