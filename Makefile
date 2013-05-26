@@ -21,15 +21,24 @@ LIBRARY_PATHS = -L/usr/lib \
 
 SOURCES = server.cc servermodule.cc 
 
-OBJECTS = $(SOURCES:.cc=.o)
-EXECUTABLE = server
+all: server client
 
-all: $(SOURCES) $(EXECUTABLE)
+server: server.o servermodule.o
+	$(CXX) $(LDFLAGS) server.o servermodule.o $(LIBRARY_PATHS) $(LIBRARIES) -o server
 
-$(EXECUTABLE): $(OBJECTS)
-	    $(CXX) $(LDFLAGS) $(OBJECTS) $(LIBRARY_PATHS) $(LIBRARIES) -o $@
-.cc.o:
-	$(CXX) $(CFLAGS) $(INCLUDE_PATHS) $(LIBRARY_PATHS) $(LIBRARIES) $< -o $@ 
+server.o: server.cc
+	$(CXX) server.cc $(CFLAGS) $(INCLUDE_PATHS) $(LIBRARY_PATHS) $(LIBRARIES) -o server.o
+
+servermodule.o: servermodule.cc
+	$(CXX) servermodule.cc $(CFLAGS) $(INCLUDE_PATHS) $(LIBRARY_PATHS) $(LIBRARIES) -o servermodule.o
+
+client: client.o
+	$(CXX) $(LDFLAGS) client.o $(LIBRARY_PATHS) $(LIBRARIES) -o client
+
+client.o: client.cc
+	$(CXX) client.cc $(CFLAGS) $(INCLUDE_PATHS) $(LIBRARY_PATHS) $(LIBRARIES) -o client.o
 
 clean:
-	    rm -f $(EXECUTABLE) $(OBJECTS)
+	    rm -f *.o
+		rm -f server
+		rm -f client
