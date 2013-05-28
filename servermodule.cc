@@ -83,11 +83,11 @@ const string ndnName2String(ndn::Name name) {
 
 	ndn::Name::const_iterator iter = name.begin();
 	for (; iter != name.end(); iter++) {
-		string comp = ndn::Name::asUriString(*iter);
+		string comp = iter->toUri ();
 		// cout << "ndnName2String(): interest name component: " << comp << endl;
 		if (comp[0] == '%') {
 			ostringstream os;
-			os << ndn::Name::asNumber(*iter);
+			os << iter->toNumber ();
 			comp = os.str();
 		}
 		str_name += (slash + comp);

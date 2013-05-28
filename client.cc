@@ -70,7 +70,6 @@ int main (int argc, char **argv) {
 
 	// TODO: ccnx-cpp aborts sending max suffix interest.
 	// not sure what is wrong
-	/********************************************************************
 	usleep (200);
 	cout << "--------------------------------------------------" << endl;
 	interest = ndn::Interest();
@@ -79,9 +78,13 @@ int main (int argc, char **argv) {
 	interest.setMaxSuffixComponents(3);
 	cout << ">>>> max suffix interest: " << interest.getName() << endl;
 	cout << "Expect: NULL" << endl;
-	handler.sendInterest(interest, ndn::Closure(OnData, OnTimeout));
+	try {
+		handler.sendInterest(interest, ndn::Closure(OnData, OnTimeout));
+	}
+	catch (boost::exception &e) {
+		cerr << boost::diagnostic_information(e) << endl;
+	}
 	cout << "Interest sent" << endl;
-	*******************************************************************/
 
 
 
