@@ -36,7 +36,7 @@ int read_segment(const string& ver_path, ScopedDbConnection *c, const int seg, c
     }
     
     BSONObj seg_entry = cursor->next();
-    if (seg_entry.getIntField("type") != segment_type) {
+    if (seg_entry.getIntField("type") != ndnfs::segment_type) {
 	return -1;
     }
 
@@ -76,7 +76,7 @@ int make_segment(const string& file_path, ScopedDbConnection *c, const uint64_t 
     unsigned char *co_raw = ndn::head(co);
     int co_size = co.size();
 
-    BSONObj seg_entry = BSONObjBuilder().append("_id", full_path).append("type", segment_type)
+    BSONObj seg_entry = BSONObjBuilder().append("_id", full_path).append("type", ndnfs::segment_type)
 	.appendBinData("data", co_size, BinDataGeneral, co_raw).append("offset", segment_to_size(seg)).obj();
 
     // Add segment entry to database

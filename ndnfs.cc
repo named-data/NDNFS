@@ -32,16 +32,16 @@ using namespace mongo;
 ndn::Wrapper ndn_wrapper;
 const char *db_name = "ndnfs.root";
 
-const int dir_type = 0;
-const int file_type = 1;
-const int version_type = 2;
-const int segment_type = 3;
+const int ndnfs::dir_type = 0;
+const int ndnfs::file_type = 1;
+const int ndnfs::version_type = 2;
+const int ndnfs::segment_type = 3;
 
-const int seg_size = 4096;  // size of the content in each content object segment counted in bytes
-const int seg_size_shift = 12;
+const int ndnfs::seg_size = 4096;  // size of the content in each content object segment counted in bytes
+const int ndnfs::seg_size_shift = 12;
 
-int user_id = 0;
-int group_id = 0;
+int ndnfs::user_id = 0;
+int ndnfs::group_id = 0;
 
 static void create_fuse_operations(struct fuse_operations *fuse_op)
 {
@@ -64,11 +64,11 @@ static struct fuse_operations ndnfs_fs_ops;
 
 int main(int argc, char **argv)
 {
-    assert((1 << seg_size_shift) == seg_size);
+    assert((1 << ndnfs::seg_size_shift) == ndnfs::seg_size);
     
     // uid and gid will be set to that of the user who starts the fuse process
-    user_id = getuid();
-    group_id = getgid();
+    ndnfs::user_id = getuid();
+    ndnfs::group_id = getgid();
 
     cout << "main: NDNFS version beta 0.1" << endl;
     cout << "main: test mongodb connection..." << endl;
@@ -93,7 +93,7 @@ int main(int argc, char **argv)
     if (!cursor->more()) {
         // Create root directory as an empty folder if database is empty
 	int now = time(0);
-	BSONObj root_dir = BSONObjBuilder().append("_id", "/").append("type", dir_type).append("mode", 0777)
+	BSONObj root_dir = BSONObjBuilder().append("_id", "/").append("type", ndnfs::dir_type).append("mode", 0777)
 	    .append("atime", now).append("mtime", now).append("data", BSONArrayBuilder().arr()).obj();
         c->conn().insert(db_name, root_dir);
     }

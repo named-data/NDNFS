@@ -25,12 +25,12 @@
 
 inline int seek_segment(int doff)
 {
-    return (doff >> seg_size_shift);
+    return (doff >> ndnfs::seg_size_shift);
 }
 
 inline int segment_to_size(int seg)
 {
-    return (seg << seg_size_shift);
+    return (seg << ndnfs::seg_size_shift);
 }
 
 inline const char* get_segment_data_raw(mongo::BSONObj& seg_entry, int& data_len)

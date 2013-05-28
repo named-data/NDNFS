@@ -39,7 +39,7 @@ int ndnfs_open(const char *path, struct fuse_file_info *fi)
     }
 
     BSONObj file_entry = cursor->next();
-    if (file_entry.getIntField("type") != file_type) {
+    if (file_entry.getIntField("type") != ndnfs::file_type) {
         c->done();
 	delete c;
 	return -EISDIR;
@@ -111,7 +111,7 @@ int ndnfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
     
     // Create new file entry with empty version list and a temp version
     int now = time(0);
-    BSONObj file_entry = BSONObjBuilder().append("_id", file_path).append("type", file_type).append("mode", mode).append("temp", tmp_ver)
+    BSONObj file_entry = BSONObjBuilder().append("_id", file_path).append("type", ndnfs::file_type).append("mode", mode).append("temp", tmp_ver)
 	.append("size", 0).append("atime", now).append("mtime", now).append("data", (long long)-1).obj();
 
     // Add the file entry to database
@@ -143,7 +143,7 @@ int ndnfs_read(const char *path, char *buf, size_t size, off_t offset, struct fu
     }
     
     BSONObj entry = cursor->next();
-    if (entry.getIntField("type") != file_type) {
+    if (entry.getIntField("type") != ndnfs::file_type) {
         c->done();
         delete c;
         return -EINVAL;
@@ -175,7 +175,7 @@ int ndnfs_write(const char *path, const char *buf, size_t size, off_t offset, st
     }
     
     BSONObj entry = cursor->next();
-    if (entry.getIntField("type") != file_type) {
+    if (entry.getIntField("type") != ndnfs::file_type) {
         c->done();
         delete c;
         return -EINVAL;
@@ -213,7 +213,7 @@ int ndnfs_truncate(const char *path, off_t length)
     }
     
     BSONObj file_entry = cursor->next();
-    if (file_entry.getIntField("type") != file_type) {
+    if (file_entry.getIntField("type") != ndnfs::file_type) {
         c->done();
 	delete c;
 	return -EISDIR;
@@ -270,7 +270,7 @@ int ndnfs_release(const char *path, struct fuse_file_info *fi)
     }
     
     BSONObj file_entry = cursor->next();
-    if (file_entry.getIntField("type") != file_type) {
+    if (file_entry.getIntField("type") != ndnfs::file_type) {
         c->done();
 	delete c;
 	return -1;

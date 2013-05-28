@@ -39,7 +39,7 @@ int ndnfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t off
     
     BSONObj entry = cursor->next();
     int type = entry.getIntField("type");
-    if (type != dir_type) {
+    if (type != ndnfs::dir_type) {
         c->done();
         delete c;
         return -ENOENT;
@@ -89,7 +89,7 @@ int ndnfs_mkdir(const char *path, mode_t mode)
     
     // Add new file entry with empty content
     int now = time(0);
-    BSONObj dir_entry = BSONObjBuilder().append("_id", path).append("type", dir_type).append("mode", mode)
+    BSONObj dir_entry = BSONObjBuilder().append("_id", path).append("type", ndnfs::dir_type).append("mode", mode)
 	.append("atime", now).append("mtime", now).append("data", BSONArrayBuilder().arr()).obj();
     c->conn().insert(db_name, dir_entry);
     // Append to existing BSON array
@@ -132,7 +132,7 @@ int ndnfs_rmdir(const char *path)
     
     // Cannot create non-empty dir
     BSONObj dir_entry = cursor->next();
-    assert(dir_entry.getIntField("type") == dir_type);
+    assert(dir_entry.getIntField("type") == ndnfs::dir_type);
     vector< BSONElement > dir_data = dir_entry["data"].Array();
     if (dir_data.size() != 0) {
         c->done();

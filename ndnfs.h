@@ -45,16 +45,17 @@
 extern ndn::Wrapper ndn_wrapper;
 extern const char *db_name;
 
-extern const int dir_type;
-extern const int file_type;
-extern const int version_type;
-extern const int segment_type;
-extern const int seg_size;
-extern const int seg_size_shift;
+namespace ndnfs {
+    extern const int dir_type;
+    extern const int file_type;
+    extern const int version_type;
+    extern const int segment_type;
+    extern const int seg_size;
+    extern const int seg_size_shift;
 
-extern int user_id;
-extern int group_id;
-
+    extern int user_id;
+    extern int group_id;
+}
 
 inline int split_last_component(const std::string &path, std::string &prefix, std::string &name)
 {

@@ -42,12 +42,12 @@ int ndnfs_getattr(const char *path, struct stat *stbuf)
     BSONObj entry = cursor->next();  // There should be no two entries with the same id (absolute path)
     int type = entry.getIntField("type");
     
-    if (type == dir_type) {
+    if (type == ndnfs::dir_type) {
 	stbuf->st_mode = S_IFDIR | entry.getIntField("mode");
 	stbuf->st_atime = entry.getIntField("atime");
 	stbuf->st_mtime = entry.getIntField("mtime");
         stbuf->st_nlink = 1;
-    } else if (type == file_type) {
+    } else if (type == ndnfs::file_type) {
         stbuf->st_mode = S_IFREG | entry.getIntField("mode");
 	stbuf->st_atime = entry.getIntField("atime");
 	stbuf->st_mtime = entry.getIntField("mtime");
@@ -60,8 +60,8 @@ int ndnfs_getattr(const char *path, struct stat *stbuf)
     }
 
     // Use the same id for all files and dirs
-    stbuf->st_uid = user_id;
-    stbuf->st_gid = group_id;
+    stbuf->st_uid = ndnfs::user_id;
+    stbuf->st_gid = ndnfs::group_id;
     
     c->done();
     delete c;

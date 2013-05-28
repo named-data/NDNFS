@@ -34,7 +34,7 @@ int get_version_size(const string& path, ScopedDbConnection *c, const long long 
     }
 
     BSONObj ver_entry = cursor->next();
-    if (ver_entry.getIntField("type") != version_type) {
+    if (ver_entry.getIntField("type") != ndnfs::version_type) {
         return -1;
     }
     
@@ -52,7 +52,7 @@ int get_current_version_size(const string& path, ScopedDbConnection *c, BSONObj&
     }
 
     BSONObj ver_entry = cursor->next();
-    if (ver_entry.getIntField("type") != version_type) {
+    if (ver_entry.getIntField("type") != ndnfs::version_type) {
         return -1;
     }
     
@@ -68,7 +68,7 @@ int read_version(const string& ver_path, ScopedDbConnection *c, char *output, si
     }
     
     BSONObj ver_entry = cursor->next();
-    if (ver_entry.getIntField("type") != version_type) {
+    if (ver_entry.getIntField("type") != ndnfs::version_type) {
 	return -EINVAL;
     }
 
@@ -130,7 +130,7 @@ int write_temp_version(const string& path, ScopedDbConnection *c, BSONObj& file_
 	    }
 	
 	    BSONObj curr_ver_entry = cursor->next();
-	    if (curr_ver_entry.getIntField("type") != version_type) {
+	    if (curr_ver_entry.getIntField("type") != ndnfs::version_type) {
 		return -1;
 	    }
 
@@ -155,7 +155,7 @@ int write_temp_version(const string& path, ScopedDbConnection *c, BSONObj& file_
 		}
 
 		BSONObj seg_entry = cursor->next();
-		if (seg_entry.getIntField("type") != segment_type) {
+		if (seg_entry.getIntField("type") != ndnfs::segment_type) {
 		    return -1;
 		}
 
@@ -178,7 +178,7 @@ int write_temp_version(const string& path, ScopedDbConnection *c, BSONObj& file_
 	}
 
         // Insert temp version entry
-	BSONObj ver_entry = BSONObjBuilder().append("_id", tmp_ver_path).append("type", version_type)
+	BSONObj ver_entry = BSONObjBuilder().append("_id", tmp_ver_path).append("type", ndnfs::version_type)
 	    .append("data", bab.arr()).append("size", offset).obj();
 
         // Add verion entry to database
@@ -194,7 +194,7 @@ int write_temp_version(const string& path, ScopedDbConnection *c, BSONObj& file_
 
     // From now on, we only work on the temp version
     BSONObj tmp_ver_entry = cursor->next();
-    if (tmp_ver_entry.getIntField("type") != version_type) {
+    if (tmp_ver_entry.getIntField("type") != ndnfs::version_type) {
 	// This should never happen
 	return -1;
     }
@@ -214,7 +214,7 @@ int write_temp_version(const string& path, ScopedDbConnection *c, BSONObj& file_
 	}
 
 	BSONObj seg_entry = cursor->next();
-	if (seg_entry.getIntField("type") != segment_type) {
+	if (seg_entry.getIntField("type") != ndnfs::segment_type) {
 	    return -1;
 	}
     	
@@ -228,7 +228,7 @@ int write_temp_version(const string& path, ScopedDbConnection *c, BSONObj& file_
 	    assert(tail < seg_content->size());
 	    const char *old_data = (const char *)ndn::head(*seg_content);
 
-	    int copy_len = seg_size - tail;
+	    int copy_len = ndnfs::seg_size - tail;
 	    if (copy_len > size) {
 		// The data we want to write may not fill out the rest of the segment
 		copy_len = size;
@@ -257,7 +257,7 @@ int write_temp_version(const string& path, ScopedDbConnection *c, BSONObj& file_
     }
     
     while (size_left > 0) {
-	int copy_len = seg_size;
+	int copy_len = ndnfs::seg_size;
 	if (copy_len > size_left) {
 	    copy_len = size_left;
 	    final = true;
@@ -307,7 +307,7 @@ int truncate_temp_version(const string& path, ScopedDbConnection *c, BSONObj& fi
 	    }
 	
 	    BSONObj curr_ver_entry = cursor->next();
-	    if (curr_ver_entry.getIntField("type") != version_type) {
+	    if (curr_ver_entry.getIntField("type") != ndnfs::version_type) {
 		return -1;
 	    }
 
@@ -332,7 +332,7 @@ int truncate_temp_version(const string& path, ScopedDbConnection *c, BSONObj& fi
 		}
 
 		BSONObj seg_entry = cursor->next();
-		if (seg_entry.getIntField("type") != segment_type) {
+		if (seg_entry.getIntField("type") != ndnfs::segment_type) {
 		    return -1;
 		}
 
@@ -355,7 +355,7 @@ int truncate_temp_version(const string& path, ScopedDbConnection *c, BSONObj& fi
 	}
 
         // Insert temp version entry
-	BSONObj ver_entry = BSONObjBuilder().append("_id", tmp_ver_path).append("type", version_type)
+	BSONObj ver_entry = BSONObjBuilder().append("_id", tmp_ver_path).append("type", ndnfs::version_type)
 	    .append("data", bab.arr()).append("size", length).obj();
 
         // Add verion entry to database
@@ -365,7 +365,7 @@ int truncate_temp_version(const string& path, ScopedDbConnection *c, BSONObj& fi
     }
     
     BSONObj tmp_ver_entry = cursor->next();
-    if (tmp_ver_entry.getIntField("type") != version_type) {
+    if (tmp_ver_entry.getIntField("type") != ndnfs::version_type) {
         return -EINVAL;
     }
 
