@@ -73,7 +73,7 @@ int main(int argc, char **argv)
     cout << "main: NDNFS version beta 0.1" << endl;
     cout << "main: test mongodb connection..." << endl;
     
-    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
+    mongo::ScopedDbConnection *c = mongo::ScopedDbConnection::getScopedDbConnection("localhost");
     if (c->ok()) {
         cout << "main: ok" << endl;
     } else {

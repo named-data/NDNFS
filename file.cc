@@ -30,7 +30,7 @@ int ndnfs_open(const char *path, struct fuse_file_info *fi)
     cout << "ndnfs_open: flag is 0x" << std::hex << fi->flags << endl;
 #endif
 
-    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
+    mongo::ScopedDbConnection *c = mongo::ScopedDbConnection::getScopedDbConnection("localhost");
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
     if (!cursor->more()) {
         c->done();
@@ -89,7 +89,7 @@ int ndnfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
     string dir_path, file_name;
     split_last_component(file_path, dir_path, file_name);
     
-    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
+    mongo::ScopedDbConnection *c = mongo::ScopedDbConnection::getScopedDbConnection("localhost");
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << file_path));
     if (cursor->more()) {
         // Cannot create file that has conflicting file name
@@ -134,7 +134,7 @@ int ndnfs_read(const char *path, char *buf, size_t size, off_t offset, struct fu
     cout << "ndnfs_read: start read at offset " << std::dec << offset << " with size " << size << endl;
 #endif
 
-    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
+    mongo::ScopedDbConnection *c = mongo::ScopedDbConnection::getScopedDbConnection("localhost");
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
     if (!cursor->more()) {
         c->done();
@@ -166,7 +166,7 @@ int ndnfs_write(const char *path, const char *buf, size_t size, off_t offset, st
 #endif
 
     string file_path(path);
-    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
+    mongo::ScopedDbConnection *c = mongo::ScopedDbConnection::getScopedDbConnection("localhost");
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << file_path));
     if (!cursor->more()) {
         c->done();
@@ -204,7 +204,7 @@ int ndnfs_truncate(const char *path, off_t length)
     cout << "ndnfs_truncate: truncate to length " << std::dec << length << endl;
 #endif
 
-    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
+    mongo::ScopedDbConnection *c = mongo::ScopedDbConnection::getScopedDbConnection("localhost");
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
     if (!cursor->more()) {
         c->done();
@@ -238,7 +238,7 @@ int ndnfs_unlink(const char *path)
     string dir_path, file_name;
     split_last_component(file_path, dir_path, file_name);
     
-    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
+    mongo::ScopedDbConnection *c = mongo::ScopedDbConnection::getScopedDbConnection("localhost");
     
     // First remove pointer in the folder that holds the file
     c->conn().update(db_name, BSON("_id" << dir_path), BSON( "$pull" << BSON( "data" << file_name ) ));
@@ -261,7 +261,7 @@ int ndnfs_release(const char *path, struct fuse_file_info *fi)
     cout << "ndnfs_release: called with path " << path << " and flag " << std::hex << fi->flags << endl;
 #endif
 
-    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
+    mongo::ScopedDbConnection *c = mongo::ScopedDbConnection::getScopedDbConnection("localhost");
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
     if (!cursor->more()) {
 	c->done();

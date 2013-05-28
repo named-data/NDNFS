@@ -31,7 +31,7 @@ int ndnfs_getattr(const char *path, struct stat *stbuf)
 
     memset(stbuf, 0, sizeof(struct stat));
 
-    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
+    mongo::ScopedDbConnection *c = mongo::ScopedDbConnection::getScopedDbConnection("localhost");
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
     if (!cursor->more()) {
         c->done();
@@ -76,7 +76,7 @@ int ndnfs_chmod(const char *path, mode_t mode)
     cout << "ndnfs_chmod: change mode to 0" << std::oct << mode << endl;
 #endif
 
-    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
+    mongo::ScopedDbConnection *c = mongo::ScopedDbConnection::getScopedDbConnection("localhost");
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
     if (!cursor->more()) {
         c->done();
@@ -103,7 +103,7 @@ int ndnfs_setxattr(const char *path, const char *name, const char *value, size_t
     //cout << "ndnfs_setxattr: set attr " << name << " to " << value << endl;
     cout << "ndnfs_setxattr: set attr " << name << endl;
 
-    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
+    mongo::ScopedDbConnection *c = mongo::ScopedDbConnection::getScopedDbConnection("localhost");
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
     if (!cursor->more()) {
         c->done();

@@ -24,7 +24,7 @@ using namespace boost;
 using namespace mongo;
 
 
-int get_version_size(const string& path, ScopedDbConnection *c, const long long ver)
+int get_version_size(const string& path, mongo::ScopedDbConnection *c, const long long ver)
 {
     string ver_path = path + "/" + lexical_cast<string> (ver);
 
@@ -41,7 +41,7 @@ int get_version_size(const string& path, ScopedDbConnection *c, const long long 
     return get_version_size(ver_entry);
 }
 
-int get_current_version_size(const string& path, ScopedDbConnection *c, BSONObj& file_entry)
+int get_current_version_size(const string& path, mongo::ScopedDbConnection *c, BSONObj& file_entry)
 {
     string version = lexical_cast<string> (get_current_version(file_entry));
     string ver_path = path + "/" + version;
@@ -60,7 +60,7 @@ int get_current_version_size(const string& path, ScopedDbConnection *c, BSONObj&
 }
 
 
-int read_version(const string& ver_path, ScopedDbConnection *c, char *output, size_t size, off_t offset)
+int read_version(const string& ver_path, mongo::ScopedDbConnection *c, char *output, size_t size, off_t offset)
 {
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << ver_path));
     if (!cursor->more()) {
@@ -106,7 +106,7 @@ int read_version(const string& ver_path, ScopedDbConnection *c, char *output, si
 }
 
 
-int write_temp_version(const string& path, ScopedDbConnection *c, BSONObj& file_entry, const char *buf, size_t size, off_t offset)
+int write_temp_version(const string& path, mongo::ScopedDbConnection *c, BSONObj& file_entry, const char *buf, size_t size, off_t offset)
 {
     int seg_off = seek_segment(offset);
 
@@ -283,7 +283,7 @@ out:
 }
 
 
-int truncate_temp_version(const string& path, ScopedDbConnection *c, BSONObj& file_entry, off_t length)
+int truncate_temp_version(const string& path, mongo::ScopedDbConnection *c, BSONObj& file_entry, off_t length)
 {
     int seg_off = seek_segment(length);
 
@@ -396,14 +396,14 @@ int truncate_temp_version(const string& path, ScopedDbConnection *c, BSONObj& fi
 }
 
 
-void remove_version(const string& ver_path, ScopedDbConnection *c)
+void remove_version(const string& ver_path, mongo::ScopedDbConnection *c)
 {
     remove_segments(ver_path, c);
     c->conn().remove(db_name, QUERY("_id" << ver_path));
 }
 
 
-void remove_versions(const string& file_path, ScopedDbConnection *c)
+void remove_versions(const string& file_path, mongo::ScopedDbConnection *c)
 {
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << file_path));
     if (!cursor->more()) {
