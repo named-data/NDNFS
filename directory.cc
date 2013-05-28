@@ -29,7 +29,7 @@ int ndnfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t off
     cout << "ndnfs_readdir: called with path " << path << endl;
 #endif    
 
-    mongo::ScopedDbConnection *c = mongo::ScopedDbConnection::getScopedDbConnection("localhost");
+    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
     if (!cursor->more()) {
         c->done();
@@ -68,7 +68,7 @@ int ndnfs_mkdir(const char *path, mode_t mode)
     string dir_path, dir_name;
     split_last_component(path, dir_path, dir_name);
     
-    mongo::ScopedDbConnection *c = mongo::ScopedDbConnection::getScopedDbConnection("localhost");
+    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
     if (cursor->more()) {
         // Cannot create file that has conflicting file name
@@ -121,7 +121,7 @@ int ndnfs_rmdir(const char *path)
     string parent_dir_path, dir_name;
     split_last_component(path, parent_dir_path, dir_name);
     
-    mongo::ScopedDbConnection *c = mongo::ScopedDbConnection::getScopedDbConnection("localhost");
+    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
     if (!cursor->more()) {
         // Cannot remove non-existing data

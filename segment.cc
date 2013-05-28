@@ -25,7 +25,7 @@ using namespace std;
 using namespace boost;
 using namespace mongo;
 
-int read_segment(const string& ver_path, mongo::ScopedDbConnection *c, const int seg, char *output, const int limit, const int offset)
+int read_segment(const string& ver_path, ScopedDbConnection *c, const int seg, char *output, const int limit, const int offset)
 {
     string segment = lexical_cast<string> (seg);
     string seg_path = ver_path + "/" + segment;
@@ -61,7 +61,7 @@ int read_segment(const string& ver_path, mongo::ScopedDbConnection *c, const int
 }
 
 
-int make_segment(const string& file_path, mongo::ScopedDbConnection *c, const uint64_t ver, const int seg, const bool final, const char *data, const int len)
+int make_segment(const string& file_path, ScopedDbConnection *c, const uint64_t ver, const int seg, const bool final, const char *data, const int len)
 {
     string version = lexical_cast<string> (ver);
     string segment = lexical_cast<string> (seg);
@@ -85,7 +85,7 @@ int make_segment(const string& file_path, mongo::ScopedDbConnection *c, const ui
     return 0;
 }
 
-void remove_segments(const string& ver_path, mongo::ScopedDbConnection *c, const int start/* = 0 */)
+void remove_segments(const string& ver_path, ScopedDbConnection *c, const int start/* = 0 */)
 {
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << ver_path));
     if (!cursor->more()) {
@@ -101,7 +101,7 @@ void remove_segments(const string& ver_path, mongo::ScopedDbConnection *c, const
     }
 }
 
-void truncate_segment(const string& ver_path, mongo::ScopedDbConnection *c, const int seg, const off_t length)
+void truncate_segment(const string& ver_path, ScopedDbConnection *c, const int seg, const off_t length)
 {
     string seg_path = ver_path + "/" + lexical_cast<string> (seg);
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << seg_path));
