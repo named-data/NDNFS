@@ -77,7 +77,7 @@ def build (bld):
         target = "ndnfs",
         features = ["cxx", "cxxprogram"],
         source = bld.path.ant_glob(['**/*.cc']),
-        use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD FUSE CCNX SSL MONGODB NDNCXX',
+        use = 'MONGODB BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD FUSE CCNX SSL NDNCXX',
         includes = ".",
         )
 
