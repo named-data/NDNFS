@@ -9,18 +9,23 @@ Compilation on Mac OSX 10.8.3
 Dependencies:
 
 OXSFUSE 2.5.6;
+
 mongodb 2.4.3 (including its cpp library ver. 2.4.3);
+
 ndn.cxx library;
+
 boost library;
 
 To compile the source code:
 
 ./waf configure (--debug)
+
 ./waf
 
 To run on Mac:
 
 mkdir /tmp/ndnfs
+
 ./build/ndnfs /tmp/ndnfs
 
 This will mount the file system to local folder '/tmp/ndnfs/'. To unmount NDNFS, simply type:
