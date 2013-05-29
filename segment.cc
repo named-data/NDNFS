@@ -76,7 +76,7 @@ int make_segment(const string& file_path, ScopedDbConnection *c, const uint64_t 
     unsigned char *co_raw = ndn::head(co);
     int co_size = co.size();
 
-    BSONObj seg_entry = BSONObjBuilder().append("_id", full_path).append("type", ndnfs::segment_type)
+    BSONObj seg_entry = BSONObjBuilder().append("_id", full_path).append("type", ndnfs::segment_type).append("size", len)
 	.appendBinData("data", co_size, BinDataGeneral, co_raw).append("offset", segment_to_size(seg)).obj();
 
     // Add segment entry to database
