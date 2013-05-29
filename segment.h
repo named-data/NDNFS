@@ -35,12 +35,7 @@ inline int segment_to_size(int seg)
 
 inline const char* get_segment_data_raw(mongo::BSONObj& seg_entry, int& data_len)
 {
-    if (seg_entry.getIntField("size") == 0) {
-	data_len = 0;
-	return NULL;
-    } else {
-	return seg_entry.getField("data").binData(data_len);
-    }
+    return seg_entry.getField("data").binData(data_len);
 }
 
 int read_segment(const std::string& ver_path, mongo::ScopedDbConnection *c, const int seg, char *output, const int limit, const int offset);

@@ -63,6 +63,8 @@ int read_segment(const string& ver_path, ScopedDbConnection *c, const int seg, c
 
 int make_segment(const string& file_path, ScopedDbConnection *c, const uint64_t ver, const int seg, const bool final, const char *data, const int len)
 {
+    assert(len > 0);
+
     string version = lexical_cast<string> (ver);
     string segment = lexical_cast<string> (seg);
     string ver_path = file_path + "/" + version;
@@ -76,7 +78,7 @@ int make_segment(const string& file_path, ScopedDbConnection *c, const uint64_t 
     unsigned char *co_raw = ndn::head(co);
     int co_size = co.size();
 
-    BSONObj seg_entry = BSONObjBuilder().append("_id", full_path).append("type", ndnfs::segment_type).append("size", len)
+    BSONObj seg_entry = BSONObjBuilder().append("_id", full_path).append("type", ndnfs::segment_type)
 	.appendBinData("data", co_size, BinDataGeneral, co_raw).append("offset", segment_to_size(seg)).obj();
 
     // Add segment entry to database
