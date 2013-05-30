@@ -73,6 +73,9 @@ int make_segment(const string& file_path, ScopedDbConnection *c, const uint64_t 
     ndn::Name seg_name(file_path);
     seg_name.appendVersion(ver);
     seg_name.appendSeqNum(seg);
+#ifdef NDNFS_DEBUG
+    cout << "make_segment: seg_name is " << seg_name.toUri() << endl;
+#endif
 
     ndn::Bytes co = ndn_wrapper.createContentObject(seg_name, data, len);
     unsigned char *co_raw = ndn::head(co);
