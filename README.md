@@ -20,11 +20,11 @@ To compile the source code:
 To run on Ubuntu:
 	
 	./server [-p prefix] [-d dbname]
-
-By default, prefix = "/", dbname = 'ndnfs.root'. This will start the server module that serves incoming interest with name under prefix "prefix" for possible matching content objects stored in database on localhost specified by "dbname"
 	./client [-n prefix] [-i minsuffixcomps] [-a maxsuffixcomps] [-c childselector]
 
-Must at least specify prefix with -n option. This will issue an interest with speficied name selectors and send it to localhost for data fectching.
+For server, prefix = "/", dbname = 'ndnfs.root' by default. This will start the server module that serves incoming interest with name under prefix "prefix" for possible matching content objects stored in database on localhost specified by "dbname"
+
+For client, the prefix must be specified with -n option. This will issue an interest with speficied name selectors and send it to localhost for data fectching.
 
 Compilation on Mac OS
 ---------------------
