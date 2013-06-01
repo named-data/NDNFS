@@ -1,31 +1,32 @@
-/*
- * Copyright (c) 2013 University of California, Los Angeles
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation;
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
- *
- * Author: Zhe Wen <wenzhe@cs.ucla.edu>
- */
+NDNFS Server Module
+===================
 
-Server Module for NDNFS - network interaction
+Server Module for NDNFS-network interaction
 
-Developed based on ccnx, ccnx-cpp, and mongoDB
+Compilation on Ubuntu 12.04
+---------------------------
 
-Use make to build project instead of waf
+Dependencies:
 
-supported name selectors:
-	minSuffixComponents
-	maxSuffixComponents
-	childSelector
+* mongodb 2.4.3 (including its cpp library version 2.4.3)
+* ccnx-cpp library
+* ccnx library
+* boost library
 
-client.cc constructs some example interests for test purpose
+To compile the source code:
+
+	./make
+
+To run on Ubuntu:
+	
+	./server [-p prefix] [-d dbname]
+
+By default, prefix = "/", dbname = 'ndnfs.root'. This will start the server module that serves incoming interest with name under prefix "prefix" for possible matching content objects stored in database on localhost specified by "dbname"
+	./client [-n prefix] [-i minsuffixcomps] [-a maxsuffixcomps] [-c childselector]
+
+Must at least specify prefix with -n option. This will issue an interest with speficied name selectors and send it to localhost for data fectching.
+
+Compilation on Mac OS
+---------------------
+
+This should be exactly the same as that on Ubuntu 12.04

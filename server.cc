@@ -24,7 +24,7 @@
 
 using namespace std;
 
-const char* db_name = "ndnfs.root";
+char* db_name = "ndnfs.root";
 mongo::ScopedDbConnection* c;
 bool child_selector_set;
 
@@ -32,6 +32,22 @@ bool child_selector_set;
 ndn::Wrapper handler;
 
 int main(int argc, char **argv) {
+	char* prefix = "/";
+	int opt;
+
+	while ((opt = getopt(argc, argv, "p:d:")) != -1) {
+		switch (opt) {
+			case 'p':
+				prefix = optarg;
+				break;
+			case 'd':
+				db_name = optarg;
+				break;
+			default:
+				break;
+		}
+	}
+
 	c = mongo::ScopedDbConnection::getScopedDbConnection("localhost");
 	if (c->ok())
 		cout << "main(): connected to local mongo db" << endl;
@@ -41,8 +57,9 @@ int main(int argc, char **argv) {
 		delete c;
 		exit(EXIT_FAILURE);
 	}
-	
-	ndn::Name InterestBaseName = ndn::Name("/ucla.edu/cs");
+
+	cout << "serving prefix: " << prefix << endl;	
+	ndn::Name InterestBaseName = ndn::Name(prefix);
 	handler.setInterestFilter(InterestBaseName, OnInterest);
 	while (true) {
 		sleep (1);

@@ -16,8 +16,7 @@
  *
  * Author: Zhe Wen <wenzhe@cs.ucla.edu>
  */
-
-// #define DEBUG
+#define DEBUG
 
 #include <iostream>
 #include <string>
@@ -28,11 +27,12 @@
 #include <boost/lexical_cast.hpp>
 
 #include "servermodule.h"
+#include "config.h"
 
 using namespace std;
 
 extern ndn::Wrapper handler;
-extern const char* db_name;
+extern char* db_name;
 extern mongo::ScopedDbConnection* c;
 extern bool child_selector_set;
 
@@ -59,16 +59,21 @@ void OnInterest(ndn::InterestPtr interest) {
 		cout << "OnInterest(): fetching content object ..." << endl;
 		// fetch the content object from mongo db
 		int len;
-		/**********************************************
-		 * use this part to fecth data as binary
+		// use this part to fecth data as binary
 		const char* data = FetchData(ndnfs_name, len);
-		handler.publishData(interest->getName(), data, len);
-		***********************************************/
+		ndn::Bytes bin_data;
+		for (int i = 0; i < len; i++) {
+			bin_data.push_back(data[i]);
+		}
+		// handler.publishData(interest->getName(), data, len);
+		handler.putToCcnd(bin_data);
+		/**********************************************
 		// test example: string data
 		string string_data = FetchStringData(ndnfs_name, len);
 		cout << "OnInterest(): string data: " << string_data << endl;
 		// TODO: seems that client receives nothing ...
 		handler.publishData(interest->getName(), string_data.c_str(), len);
+		***********************************************/
 		cout << "OnInterest(): content object returned and interest consumed" << endl;
 	}
 	cout << "OnInterest(): Done" << endl;
@@ -141,8 +146,10 @@ struct BSONElementLessThan {
 	inline bool operator()(const mongo::BSONElement a, const mongo::BSONElement b) {
 		if (a.type() == mongo::NumberInt)
 			return (a.Int() < b.Int());
-		else
+		else if (a.type() == mongo::String)
 			return (a.String() < b.String());
+		else
+			cerr << "BSONElementLessThan(): unsupported BSONElement type" << endl;
 	}
 };
 
@@ -169,11 +176,12 @@ const string Search4PossibleMatch_Rec(mongo::ScopedDbConnection* c,
 	int first_index = 0;
 	int last_index = 0;
 	int current_index;
+	string current_name("");
 	uint8_t child_selector;
 	string ndnfs_name("");
+	auto_ptr<mongo::DBClientCursor> current_cursor;
 	switch (type) {
 		case DB_ENTRY_TYPE_DIR:
-		case DB_ENTRY_TYPE_FIL:
 		case DB_ENTRY_TYPE_VER:
 			subdir_list = current_entry["data"].Array();
 			// do sort here
@@ -215,28 +223,16 @@ const string Search4PossibleMatch_Rec(mongo::ScopedDbConnection* c,
 			for (current_index = first_index; 
 				 current_index < last_index; 
 				 current_index++) {
-				string current_name(original_name);
-				if (current_name[current_name.length()-1] == '/') {
-					// if searching under root directory, construct next level name
-					// by simply appending
-					if (type == DB_ENTRY_TYPE_DIR)
-						current_name += subdir_list[current_index].String();
-					else 
-						current_name += 
-							boost::lexical_cast<string>(subdir_list[current_index].Int());
-				}
-				else {
-					// if searching under other directory, construct next level
-					// name by appending separator (/) and subdir/file name
+				current_name = original_name;
+				if (current_name[current_name.length()-1] != '/')
 					current_name += "/";
-					if (type == DB_ENTRY_TYPE_DIR)
-						current_name += subdir_list[current_index].String();
-					else {
-						current_name += 
-							boost::lexical_cast<string>(subdir_list[current_index].Int());
-					}
-				}
-				auto_ptr<mongo::DBClientCursor> current_cursor = 
+				if (type == DB_ENTRY_TYPE_DIR)
+					current_name += subdir_list[current_index].String();
+				else 
+					current_name += 
+						boost::lexical_cast<string>(subdir_list[current_index].Int());
+				
+				current_cursor = 
 					c->conn().query(db_name, QUERY("_id" << current_name));
 				if (current_cursor->more()) {
 					next_entry = current_cursor->next();
@@ -246,6 +242,23 @@ const string Search4PossibleMatch_Rec(mongo::ScopedDbConnection* c,
 				}
 			}
 			break;
+		case DB_ENTRY_TYPE_FIL:
+			current_name = original_name;
+			if (current_name[current_name.length()-1] != '/')
+				current_name += "/";
+			current_name += 
+				boost::lexical_cast<string>(current_entry["data"].Long());
+		
+			current_cursor = 
+				c->conn().query(db_name, QUERY("_id" << current_name));
+			if (current_cursor->more()) {
+				next_entry = current_cursor->next();
+				ndnfs_name = 
+					Search4PossibleMatch_Rec(c, next_entry, interest);
+				if (!ndnfs_name.empty()) return ndnfs_name;
+			}
+			break;
+			
 		case DB_ENTRY_TYPE_SEG:
 			if (CheckSuffix(current_entry, interest)) {
 				ndnfs_name = current_entry.getStringField("_id");
@@ -322,15 +335,7 @@ const char* FetchData(string ndnfs_name, int& len) {
 
 	mongo::BSONObj entry = cursor->next();
 	assert(entry.getIntField("type") == DB_ENTRY_TYPE_SEG);
-	assert(entry.hasField("size"));
-	if (entry.getIntField("size") == 0) {
-		len = 0;
-		return NULL;
-	}
-	else {
-		len = entry.getIntField("size");
-		return entry.getField("data").binData(len);
-	}
+	return entry.getField("data").binData(len);
 }
 
 // fetch data as string from the segment specified by ndnfs_name
