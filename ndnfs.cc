@@ -32,6 +32,8 @@ using namespace mongo;
 ndn::Wrapper ndn_wrapper;
 const char *db_name = "ndnfs.root";
 
+string ndnfs::global_prefix;
+
 const int ndnfs::dir_type = 0;
 const int ndnfs::file_type = 1;
 const int ndnfs::version_type = 2;
@@ -62,15 +64,41 @@ static void create_fuse_operations(struct fuse_operations *fuse_op)
 
 static struct fuse_operations ndnfs_fs_ops;
 
+struct ndnfs_config {
+    char *prefix;
+};
+
+#define NDNFS_OPT(t, p, v) { t, offsetof(struct ndnfs_config, p), v }
+
+static struct fuse_opt ndnfs_opts[] = {
+    NDNFS_OPT("prefix=%s", prefix, 0),
+    FUSE_OPT_END
+};
+
 int main(int argc, char **argv)
 {
     assert((1 << ndnfs::seg_size_shift) == ndnfs::seg_size);
+    ndnfs::global_prefix = "";
+
+    cout << "main: NDNFS version beta 0.1" << endl;
     
     // uid and gid will be set to that of the user who starts the fuse process
     ndnfs::user_id = getuid();
     ndnfs::group_id = getgid();
 
-    cout << "main: NDNFS version beta 0.1" << endl;
+    struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
+    struct ndnfs_config conf;
+    memset(&conf, 0, sizeof(conf));
+    fuse_opt_parse(&args, &conf, ndnfs_opts, NULL);
+
+    if (conf.prefix != NULL) {
+	int plen = strlen(conf.prefix);
+	if (plen > 1 && conf.prefix[plen - 1] == '/')
+	    conf.prefix[plen - 1] = 0;  // Remove the last '/' in the prefix is there is any
+	ndnfs::global_prefix = string(conf.prefix);
+	cout << "main: global prefix is " << ndnfs::global_prefix << endl;
+    }
+
     cout << "main: test mongodb connection..." << endl;
     
     ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
@@ -105,5 +133,5 @@ int main(int argc, char **argv)
     create_fuse_operations(&ndnfs_fs_ops);
     
     cout << "main: enter FUSE main loop" << endl << endl;
-    return fuse_main(argc, argv, &ndnfs_fs_ops, NULL);
+    return fuse_main(args.argc, args.argv, &ndnfs_fs_ops, NULL);
 }

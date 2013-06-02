@@ -46,6 +46,8 @@ extern ndn::Wrapper ndn_wrapper;
 extern const char *db_name;
 
 namespace ndnfs {
+    extern std::string global_prefix;
+
     extern const int dir_type;
     extern const int file_type;
     extern const int version_type;

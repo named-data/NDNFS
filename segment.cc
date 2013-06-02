@@ -70,7 +70,7 @@ int make_segment(const string& file_path, ScopedDbConnection *c, const uint64_t 
     string ver_path = file_path + "/" + version;
     string full_path = ver_path + "/" + segment;
 
-    ndn::Name seg_name(file_path);
+    ndn::Name seg_name(ndnfs::global_prefix + file_path);
     seg_name.appendVersion(ver);
     seg_name.appendSeqNum(seg);
 #ifdef NDNFS_DEBUG
