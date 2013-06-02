@@ -20,7 +20,6 @@
 
 #include <ndn.cxx.h>
 #include <iostream>
-#include <error.h>
 
 using namespace std;
 
@@ -41,7 +40,8 @@ void OnTimeout(ndn::Name name, const ndn::Closure &closure, ndn::InterestPtr ori
 }
 
 void Usage() {
-	error(1, 0, "usage: ./client [-n name][-i minsuffix][-a maxfuffix][-c childeselector]");
+	fprintf(stderr, "usage: ./client [-n name][-i minsuffix][-a maxfuffix][-c childeselector]\n");
+	exit(1);
 }
 
 int main (int argc, char **argv) {
