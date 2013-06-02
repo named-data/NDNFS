@@ -27,7 +27,6 @@
 #include <boost/lexical_cast.hpp>
 
 #include "servermodule.h"
-#include "config.h"
 
 using namespace std;
 
