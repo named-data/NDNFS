@@ -86,67 +86,6 @@ int main (int argc, char **argv) {
 	cout << "Interest sent" << endl;
 
 	sleep(3);
-/****************************************************************************
-	cout << "--------------------------------------------------" << endl;
-	interest = ndn::Interest();
-	interest.setName(ndn::Name("/ucla.edu/cs/CS217B"));
-	interest.setScope(ndn::Interest::SCOPE_LOCAL_HOST);
-	cout << ">>>> default interest: " << interest.getName() << endl;
-	cout << "Expect: /ucla.edu/cs/CS217B/presentation.pdf/10/1: data" << endl;
-	handler.sendInterest(interest, ndn::Closure(OnData, OnTimeout));
-	cout << "Interest sent" << endl;
-
-	usleep (200);
-	cout << "--------------------------------------------------" << endl;
-	interest = ndn::Interest();
-	interest.setName(ndn::Name("/ucla.edu/cs/CS217B"));
-	interest.setScope(ndn::Interest::SCOPE_LOCAL_HOST);
-	interest.setMinSuffixComponents(5);
-	cout << ">>>> min suffix interest: " << interest.getName() << endl;
-	cout << "Expect: /ucla.edu/cs/CS217B/project/final.tar.gz/1000/0: data" << endl;
-	handler.sendInterest(interest, ndn::Closure(OnData, OnTimeout));
-	cout << "Interest sent" << endl;
-
-	usleep (200);
-	cout << "--------------------------------------------------" << endl;
-	interest = ndn::Interest();
-	interest.setName(ndn::Name("/ucla.edu/cs"));
-	interest.setScope(ndn::Interest::SCOPE_LOCAL_HOST);
-	interest.setChildSelector(ndn::Interest::CHILD_RIGHT);
-	cout << ">>>> child selector interest: " << interest.getName() << endl;
-	cout << "Expect: /ucla.edu/cs/CS217B/README.txt/100/0: data" << endl;
-	handler.sendInterest(interest, ndn::Closure(OnData, OnTimeout));
-	cout << "Interest sent" << endl;
-
-	usleep (200);
-	cout << "--------------------------------------------------" << endl;
-	interest = ndn::Interest();
-	interest.setName(ndn::Name("/cs.ucla.edu"));
-	interest.setScope(ndn::Interest::SCOPE_LOCAL_HOST);
-	cout << ">>>> non-existing interest: " << interest.getName() << endl;
-	cout << "Expect: NULL" << endl;
-	handler.sendInterest(interest, ndn::Closure(OnData, OnTimeout));
-	cout << "Interest sent" << endl;
-
-	// TODO: ccnx-cpp aborts sending max suffix interest.
-	// not sure what is wrong
-	usleep (200);
-	cout << "--------------------------------------------------" << endl;
-	interest = ndn::Interest();
-	interest.setName(ndn::Name("/ucla.edu/cs/CS217B"));
-	interest.setScope(ndn::Interest::SCOPE_LOCAL_HOST);
-	interest.setMaxSuffixComponents(3);
-	cout << ">>>> max suffix interest: " << interest.getName() << endl;
-	cout << "Expect: NULL" << endl;
-	try {
-		handler.sendInterest(interest, ndn::Closure(OnData, OnTimeout));
-	}
-	catch (boost::exception &e) {
-		cerr << boost::diagnostic_information(e) << endl;
-	}
-	cout << "Interest sent" << endl;
-****************************************************************************/
-
 
 
 	return 0;
