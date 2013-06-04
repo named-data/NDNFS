@@ -48,7 +48,7 @@ int main (int argc, char **argv) {
 	ndn::Interest interest = ndn::Interest();
 	interest.setScope(ndn::Interest::SCOPE_LOCAL_HOST);
 
-	char* name = "";
+	const char* name = "";
 	uint32_t min_suffix_comps = ndn::Interest::ncomps;
 	uint32_t max_suffix_comps = ndn::Interest::ncomps;
 	uint8_t child_selector = ndn::Interest::CHILD_DEFAULT;

@@ -32,6 +32,10 @@
 
 using namespace std;
 
+// Global prefix for NDNFS
+extern std::string global_prefix;
+
+
 // callbalck on receiving incoming interest.
 // respond proper content object and comsumes the interest. or simple ignore
 // the interest if no content object found.

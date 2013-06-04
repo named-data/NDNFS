@@ -24,12 +24,14 @@
 
 using namespace std;
 
-char* db_name = "ndnfs.root";
+const char* db_name = "ndnfs.root";
 mongo::ScopedDbConnection* c;
 bool child_selector_set;
 
 // create a global handler
 ndn::Wrapper handler;
+
+string global_prefix;
 
 int main(int argc, char **argv) {
 	char* prefix = "/";
@@ -58,7 +60,14 @@ int main(int argc, char **argv) {
 		exit(EXIT_FAILURE);
 	}
 
-	cout << "serving prefix: " << prefix << endl;	
+	cout << "serving prefix: " << prefix << endl;
+	if (strcmp(prefix, "/") != 0) {
+	    int plen = strlen(prefix);
+	    if (prefix[plen - 1] == '/')
+		prefix[plen - 1] = 0;
+	    global_prefix = string(prefix);
+	}
+	cout << "global prefix for NDNFS: " << global_prefix << endl;
 	ndn::Name InterestBaseName = ndn::Name(prefix);
 	handler.setInterestFilter(InterestBaseName, OnInterest);
 	while (true) {

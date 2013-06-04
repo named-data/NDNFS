@@ -16,7 +16,7 @@
  *
  * Author: Zhe Wen <wenzhe@cs.ucla.edu>
  */
-#define DEBUG
+//#define DEBUG
 
 #include <iostream>
 #include <string>
@@ -45,17 +45,20 @@ void OnInterest(ndn::InterestPtr interest) {
 	// 2.call NDNFS API to fetch content object
 	// 3.publish content object and consume the interest
 	static int interest_cnt = 0;
+#ifdef DEBUG
 	cout << interest_cnt++ << "------------------------------------------" << endl;
 	cout << "OnInterest(): interest name: " << interest->getName() << endl;
-
+#endif
 	const string ndnfs_name = NameSelector(interest);
 
 	if (ndnfs_name.empty()) {
 		cout << "OnInterest(): no match found for prefix: " << interest->getName() << endl;
 	}
 	else {
+#ifdef DEBUG
 		cout << "OnInterest(): a match has been found for prefix: " << interest->getName() << endl;
 		cout << "OnInterest(): fetching content object ..." << endl;
+#endif
 		// fetch the content object from mongo db
 		int len;
 		// use this part to fecth data as binary
@@ -73,10 +76,14 @@ void OnInterest(ndn::InterestPtr interest) {
 		// TODO: seems that client receives nothing ...
 		handler.publishData(interest->getName(), string_data.c_str(), len);
 		***********************************************/
+#ifdef DEBUG
 		cout << "OnInterest(): content object returned and interest consumed" << endl;
+#endif
 	}
+#ifdef DEBUG
 	cout << "OnInterest(): Done" << endl;
 	cout << "------------------------------------------------------------" << endl;
+#endif
 }
 
 // ndn-ndnfs name converter. converting name from ndn::Name representation to
@@ -88,16 +95,37 @@ const string ndnName2String(ndn::Name name) {
 	ndn::Name::const_iterator iter = name.begin();
 	for (; iter != name.end(); iter++) {
 		string comp = iter->toUri ();
-		// cout << "ndnName2String(): interest name component: " << comp << endl;
-		if (comp[0] == '%') {
+#ifdef DEBUG
+		cout << "ndnName2String(): interest name component: " << comp << endl;
+#endif
+		const uint8_t marker = *(iter->buf());
+		// cout << (unsigned int)marker << endl;
+		if (marker == 0xFD) {
 			ostringstream os;
-			os << iter->toNumber ();
+			try {
+			    os << iter->toVersion(); 
+			}
+			catch (boost::exception &e)
+			{
+			    std::cerr << boost::diagnostic_information (e) << std::endl;
+			}
+			comp = os.str();
+		} else if (marker == 0x00) {
+			ostringstream os;
+			os << iter->toSeqNum();
 			comp = os.str();
 		}
 		str_name += (slash + comp);
 	}
-	// cout << "ndnName2String(): interest name: " << str_name << endl;
-
+#ifdef DEBUG
+	cout << "ndnName2String(): interest name: " << str_name << endl;
+#endif
+	str_name = str_name.substr(global_prefix.length());
+	if (str_name == "")
+	    str_name = string("/");
+#ifdef DEBUG
+	cout << "ndnName2String(): file path after trimming: " << str_name << endl;
+#endif
 	return str_name;
 }
 
@@ -149,6 +177,7 @@ struct BSONElementLessThan {
 			return (a.String() < b.String());
 		else
 			cerr << "BSONElementLessThan(): unsupported BSONElement type" << endl;
+		return false;
 	}
 };
 
@@ -299,7 +328,7 @@ bool CheckSuffix(mongo::BSONObj current_entry, ndn::InterestPtr interest) {
 
 	// do suffix components check
 	uint32_t prefix_len = interest->getName().size();
-	string match = current_entry.getStringField("_id");
+	string match = global_prefix + current_entry.getStringField("_id");
 	uint32_t match_len = ndn::Name(match).size();
 	// digest considered one component implicitly
 	uint32_t suffix_len = match_len - prefix_len + 1;
