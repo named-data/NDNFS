@@ -22,13 +22,12 @@ class DataClosure(pyccn.Closure):
 
             segnum = pyccn.Name.seg2num(co.name[-1])
             print segnum
-            if segnum >= 55:
-                print "Total size fetched: " + str(self.totalsize)
-                return pyccn.RESULT_OK;
 
-            handler.expressInterest(self.name.appendSegment(segnum + 1), self)
+            handler.expressInterest(self.name.appendSegment(segnum + 1), self, tmpl)
 
         elif kind == pyccn.UPCALL_INTEREST_TIMED_OUT:
+            print "Timeout"
+            print "Total size fetched: " + str(self.totalsize)
             return pyccn.RESULT_OK
 
         return pyccn.RESULT_OK
@@ -39,7 +38,8 @@ if len(sys.argv) != 2:
 
 file = sys.argv[1]
 closure = DataClosure(file)
+tmpl = pyccn.Interest(interestLifetime=1.0)
 handler = pyccn.CCN()
 
-handler.expressInterest(closure.name, closure)
+handler.expressInterest(closure.name, closure, tmpl)
 handler.run(2000)
