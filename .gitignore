@@ -1,0 +1,14 @@
+*.dSYM/
+*.a
+*.dylib
+*.o
+
+*.cc~
+*.h~
+
+ndnfs
+
+.DS_Store
+.lock*
+.waf*
+build/
