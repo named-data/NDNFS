@@ -24,8 +24,7 @@ class DataClosure(pyccn.Closure):
 
             self.segnum = pyccn.Name.seg2num(co.name[-1])
 #            print self.segnum
-            if self.segnum == 9405:
-#            if self.segnum == 55:
+            if self.segnum == 23952:
                 stop = time.time()
                 print stop
                 print "Total running time: " + str(stop - start)
