@@ -47,6 +47,7 @@ void Usage() {
 int main (int argc, char **argv) {
 	ndn::Interest interest = ndn::Interest();
 	interest.setScope(ndn::Interest::SCOPE_LOCAL_HOST);
+	interest.setAnswerOriginKind(0);
 
 	const char* name = "";
 	uint32_t min_suffix_comps = ndn::Interest::ncomps;

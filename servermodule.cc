@@ -168,13 +168,18 @@ const string NameSelector(ndn::InterestPtr interest) {
 	return ndnfs_name;
 }
 
-
 struct BSONElementLessThan {
 	inline bool operator()(const mongo::BSONElement a, const mongo::BSONElement b) {
 		if (a.type() == mongo::NumberInt)
 			return (a.Int() < b.Int());
-		else if (a.type() == mongo::String)
-			return (a.String() < b.String());
+		else if (a.type() == mongo::String) {
+			if (a.String().length() < b.String().length())
+				return true;
+			else if (a.String().length() == b.String().length())
+				return (a.String() < b.String());
+			else 
+				return false;
+		}
 		else
 			cerr << "BSONElementLessThan(): unsupported BSONElement type" << endl;
 		return false;
