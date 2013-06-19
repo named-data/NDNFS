@@ -76,22 +76,36 @@ def build (bld):
     bld (
         target = "ndnfs",
         features = ["cxx", "cxxprogram"],
-        source = bld.path.ant_glob(['*.cc']),
+        source = bld.path.ant_glob(['fs/*.cc']),
         use = 'MONGODB BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD FUSE CCNX SSL NDNCXX',
+        includes = ".",
+        )
+    bld (
+        target = "ndnfs-server",
+        features = ["cxx", "cxxprogram"],
+        source = bld.path.ant_glob(['server/server.cc', 'server/servermodule.cc']),
+        use = 'MONGODB BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD CCNX SSL NDNCXX',
+        includes = ".",
+        )
+    bld (
+        target = "test-client",
+        features = ["cxx", "cxxprogram"],
+        source = bld.path.ant_glob(['server/client.cc']),
+        use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD CCNX SSL NDNCXX',
         includes = ".",
         )
     bld (
         target = "cat_file",
         features = ["cxx", "cxxprogram"],
         source = bld.path.ant_glob(['test/cat_file.cc']),
-        use = 'MONGODB BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD CCNX SSL NDNCXX',
+        use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD CCNX SSL NDNCXX',
         includes = ".",
         )
     bld (
         target = "cat_file_pipe",
         features = ["cxx", "cxxprogram"],
         source = bld.path.ant_glob(['test/cat_file_pipe.cc']),
-        use = 'MONGODB BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD CCNX SSL NDNCXX',
+        use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD CCNX SSL NDNCXX',
         includes = ".",
         )
 
