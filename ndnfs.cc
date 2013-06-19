@@ -113,8 +113,8 @@ int main(int argc, char **argv)
     
     cout << "main: mount root directory..." << endl;
     // For test purpose, clear database first
-    c->conn().dropCollection(db_name);
-    c->conn().createCollection(db_name);
+//    c->conn().dropCollection(db_name);
+//    c->conn().createCollection(db_name);
     
     // Check database first
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << "/"));

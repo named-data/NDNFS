@@ -81,9 +81,16 @@ def build (bld):
         includes = ".",
         )
     bld (
-        target = "catfile",
+        target = "cat_file",
         features = ["cxx", "cxxprogram"],
         source = bld.path.ant_glob(['test/cat_file.cc']),
+        use = 'MONGODB BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD CCNX SSL NDNCXX',
+        includes = ".",
+        )
+    bld (
+        target = "cat_file_pipe",
+        features = ["cxx", "cxxprogram"],
+        source = bld.path.ant_glob(['test/cat_file_pipe.cc']),
         use = 'MONGODB BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD CCNX SSL NDNCXX',
         includes = ".",
         )
