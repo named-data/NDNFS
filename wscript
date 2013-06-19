@@ -90,7 +90,7 @@ def build (bld):
     bld (
         target = "test-client",
         features = ["cxx", "cxxprogram"],
-        source = bld.path.ant_glob(['server/client.cc']),
+        source = bld.path.ant_glob(['test/client.cc']),
         use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD CCNX SSL NDNCXX',
         includes = ".",
         )
