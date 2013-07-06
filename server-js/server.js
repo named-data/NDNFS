@@ -20,6 +20,17 @@ var onInterest = function (interest) {
     console.log('Interest received in callback.');
 
     var query = interest.name.getSuffix(global_prefix.size());
+    // The last two components may be version or segment number
+    // Convert them into ascii-encoded integer strings
+    for (var i = 1; i <= 2; i++) {
+	var component = query.components[query.size() - i];
+	if (component[0] == 0 || component[0] == 0xFD) {
+            // this component is version of segment number
+	    component[0] = 0;  // reset 0xfd to 0, in case of a version number
+	    var num = parseInt(component.toString('hex'), 16);
+	    query.components[query.size() - i] = new Buffer(num.toString());
+	}
+    }
     var str = query.to_uri();
     console.log('Asking for Name ' + str);
 

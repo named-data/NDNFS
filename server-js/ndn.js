@@ -4,6 +4,10 @@
  * This class contains all CCNx tags
  */
 
+/**
+ * Ported to node.js by Wentao Shang
+ */
+
 
 var CCNProtocolDTags = {
 
@@ -127,8 +131,7 @@ var CCNProtocolDTags = {
 };
 
 var CCNProtocolDTagsStrings = [
-    null, null, null, null, null, null, null, null, null, null, null,
-    null, null,
+    null, null, null, null, null, null, null, null, null, null, null, null, null,
     "Any", "Name", "Component", "Certificate", "Collection", "CompleteName",
     "Content", "SignedInfo", "ContentDigest", "ContentHash", null, "Count", "Header",
     "Interest", "Key", "KeyLocator", "KeyName", "Length", "Link", "LinkAuthenticator",
@@ -144,13 +147,12 @@ var CCNProtocolDTagsStrings = [
     "RepositoryInfo", "Version", "RepositoryVersion", "GlobalPrefix", "LocalName",
     "Policy", "Namespace", "GlobalPrefixName", "PolicyVersion", "KeyValueSet", "KeyValuePair",
     "IntegerValue", "DecimalValue", "StringValue", "BinaryValue", "NameValue", "Entry",
-    "ACL", "ParameterizedName", "Prefix", "Suffix", "Root", "ProfileName", "Parameters",
-    "InfoString", null,
+    "ACL", "ParameterizedName", "Prefix", "Suffix", "Root", "ProfileName", "Parameters", "InfoString", null,
     "StatusResponse", "StatusCode", "StatusText", "SyncNode", "SyncNodeKind", "SyncNodeElement",
     "SyncVersion", "SyncNodeElements", "SyncContentHash", "SyncLeafCount", "SyncTreeDepth", "SyncByteCount",
     "ConfigSlice", "ConfigSliceList", "ConfigSliceOp" ];
 /**
- * @author: Meki Cheraoui, Wentao Shang
+ * @author: Wentao Shang
  * See COPYING for copyright and distribution information.
  * This class represents CCNTime Objects
  */
@@ -3130,7 +3132,7 @@ NDN.prototype.registerPrefix = function(prefix, onInterest) {
     var fe = new ForwardingEntry('selfreg', prefix, null, null, 3, 2147483647);
     var feBytes = fe.encodeToBinary();
 
-    var co = new ContentObject(new Name(), feBytes); 
+    var co = new ContentObject(new Name(), feBytes);
     co.sign(this.default_key);  // Use default key to sign registration packet
     var coBinary = co.encodeToBinary();
 
