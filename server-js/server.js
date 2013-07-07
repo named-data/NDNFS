@@ -22,13 +22,13 @@ var onInterest = function (interest) {
     var query = interest.name.getSuffix(global_prefix.size());
     // The last two components may be version or segment number
     // Convert them into ascii-encoded integer strings
-    for (var i = 1; i <= 2; i++) {
-	var component = query.components[query.size() - i];
+    for (var i = query.size() - 1; i >= query.size() - 2 && i >= 0; i--) {
+	var component = query.components[i];
 	if (component[0] == 0 || component[0] == 0xFD) {
             // this component is version of segment number
 	    component[0] = 0;  // reset 0xfd to 0, in case of a version number
 	    var num = parseInt(component.toString('hex'), 16);
-	    query.components[query.size() - i] = new Buffer(num.toString());
+	    query.components[i] = new Buffer(num.toString());
 	}
     }
     var str = query.to_uri();
