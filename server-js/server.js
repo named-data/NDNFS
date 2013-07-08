@@ -1,7 +1,7 @@
-var NDN = require('./ndn.js').NDN;
-var Name = require('./ndn.js').Name;
-var Interest = require('./ndn.js').Interest;
-var ContentObject = require('./ndn.js').ContentObject;
+var NDN = require('ndn-on-node').NDN;
+var Name = require('ndn-on-node').Name;
+var Interest = require('ndn-on-node').Interest;
+var ContentObject = require('ndn-on-node').ContentObject;
 var MongoClient = require('mongodb').MongoClient;
 
 var ndn = new NDN();
