@@ -4,10 +4,13 @@ var Interest = require('ndn-on-node').Interest;
 var ContentObject = require('ndn-on-node').ContentObject;
 var MongoClient = require('mongodb').MongoClient;
 
+if (process.argv.length != 3)
+    throw new Error('must specify global prefix as a command-line parameter.');
+
 var ndn = new NDN();
 ndn.setDefaultKey('./non.pub', './non.pem');
 
-var global_prefix = null;
+var global_prefix = new Name(process.argv[2]);
 var collection = null;
 
 var DIR_ENTRY = 0;
@@ -80,7 +83,6 @@ var onInterest = function (interest) {
 
 ndn.onopen = function () {
     console.log('Connected to local ccnd.');
-    global_prefix = new Name('/wentao.shang/ndnfs');
     ndn.registerPrefix(global_prefix, onInterest);
     console.log('NDNFS prefix registered. Start listening for Interests...');
 };
