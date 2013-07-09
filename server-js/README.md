@@ -5,6 +5,7 @@ A simple NDNFS server implemented in JavaScript, using NDN-on-Node library. Curr
 
 To run the server,
 
+* Install MongoDB Node.js driver via 'npm install mongodb'
 * Install 'ndn-on-node' in the folder that contains 'server.js' via 'npm install ndn-on-node'
 * Create public key pair files under the name 'non.pub' and 'non.pem' and put them in the same folder. (You may use different names but remember to change server.js code accordingly)
 

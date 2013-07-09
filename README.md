@@ -9,7 +9,7 @@ Compilation on Mac OSX 10.8.3
 Dependencies:
 
 * OXSFUSE 2.5.6;
-* MongoDB 2.4.3 (including its cpp library ver. 2.4.3);
+* MongoDB 2.4.5 (including its cpp library ver. 2.4.5);
 * ndn.cxx library;
 * boost library;
 
