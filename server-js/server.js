@@ -8,7 +8,6 @@ if (process.argv.length != 3)
     throw new Error('must specify global prefix as a command-line parameter.');
 
 var ndn = new NDN();
-ndn.setDefaultKey('./non.pub', './non.pem');
 
 var global_prefix = new Name(process.argv[2]);
 var collection = null;
@@ -91,6 +90,14 @@ MongoClient.connect("mongodb://localhost:27017/ndnfs", function(err, db) {
 	if (err) { console.log('Cannot connect to MongoDB.'); return; }
 	
 	console.log('Connected to NDNFS database in MongoDB.');
+
+	process.on('SIGINT', function () {
+		console.log('Close connection and quit.');
+		db.close();
+		if (ndn.ready_status == NDN.OPENED)
+		    ndn.close();
+	    });
+
 
 	collection = db.collection('root');
 
