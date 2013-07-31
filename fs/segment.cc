@@ -21,6 +21,8 @@
 
 #include <boost/lexical_cast.hpp>
 
+#include <ndn.cxx/helpers/uri.h>
+
 using namespace std;
 using namespace boost;
 using namespace mongo;
@@ -69,8 +71,11 @@ int make_segment(const string& file_path, ScopedDbConnection *c, const uint64_t 
     string segment = lexical_cast<string> (seg);
     string ver_path = file_path + "/" + version;
     string full_path = ver_path + "/" + segment;
+    string full_name = ndnfs::global_prefix + file_path;
+    string escaped_name;
+    ndn::Uri::toEscaped(full_name.begin(), full_name.end(), back_inserter(escaped_name));
 
-    ndn::Name seg_name(ndnfs::global_prefix + file_path);
+    ndn::Name seg_name(escaped_name);
     seg_name.appendVersion(ver);
     seg_name.appendSeqNum(seg);
 #ifdef NDNFS_DEBUG
