@@ -58,10 +58,10 @@ void OnInterest(Ptr<Interest> interest) {
 	cout << "OnInterest(): no match found for prefix: " << interest->getName() << endl;
     }
     else {
-#ifdef DEBUG
+      //#ifdef DEBUG
 	cout << "OnInterest(): a match has been found for prefix: " << interest->getName() << endl;
 	cout << "OnInterest(): fetching content object ..." << endl;
-#endif
+	//#endif
 	// fetch the content object from mongo db
 	int len;
 	// use this part to fecth data as binary
@@ -79,14 +79,14 @@ void OnInterest(Ptr<Interest> interest) {
 		// TODO: seems that client receives nothing ...
 		handler.publishData(interest->getName(), string_data.c_str(), len);
 	***********************************************/
-#ifdef DEBUG
+	//#ifdef DEBUG
 	cout << "OnInterest(): content object returned and interest consumed" << endl;
-#endif
+	//#endif
     }
-#ifdef DEBUG
+    //#ifdef DEBUG
     cout << "OnInterest(): Done" << endl;
     cout << "------------------------------------------------------------" << endl;
-#endif
+    //#endif
 }
 
 // ndn-ndnfs name converter. converting name from ndn::Name representation to

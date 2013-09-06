@@ -35,7 +35,7 @@ using namespace ndn;
 using namespace boost;
 
 Ptr<security::OSXPrivatekeyStore> privateStoragePtr = Ptr<security::OSXPrivatekeyStore>::Create();
-  Ptr<security::Keychain> keychain = Ptr<security::Keychain>(new security::Keychain(privateStoragePtr, "/Users/ndn/qiiuhan/policy", "/tmp/encryption.db"));
+Ptr<security::Keychain> keychain = Ptr<security::Keychain>(new security::Keychain(privateStoragePtr, "/Users/ndn/qiuhan/policy", "/tmp/encryption.db"));
 Ptr<Wrapper> handler = Ptr<Wrapper>(new Wrapper(keychain));////////////////////////
 
 void OnData(Ptr<Data> data);

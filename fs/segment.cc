@@ -20,10 +20,13 @@
 #include "segment.h"
 #include <ndn.cxx/data.h>
 #include <ndn.cxx/common.h>
+#include <ndn.cxx/security/exception.h>
 
 #include <boost/lexical_cast.hpp>
 
 #include <ndn.cxx/helpers/uri.h>
+
+#include <iostream>
 
 using namespace std;
 using namespace boost;
@@ -94,7 +97,12 @@ int make_segment(const string& file_path, ScopedDbConnection *c, const uint64_t 
     Data data0;
     data0.setName(seg_name);
     data0.setContent(co);
-    keychain->sign(data0,Name('/ndn/ucla.edu/qiuhan'));////XXXXXXXXXXX
+    try{
+      keychain->sign(data0,signer);////XXXXXXXXXXX
+    }catch(security::SecException & e){
+      cerr << e.Msg() << endl;
+      cerr << data0.getName() << endl;
+    }
     Ptr<Blob> wire_data = data0.encodeToWire();
     char* co_raw = wire_data->buf();
     int co_size = wire_data->size();
@@ -157,7 +165,7 @@ void truncate_segment(const string& ver_path, ScopedDbConnection *c, const int s
     Data trunc_data;////
     trunc_data.setName(data->getName());////
     trunc_data.setContent(co);////
-    keychain->sign(trunc_data);////XXXXXX
+    keychain->sign(trunc_data,signer);////XXXXXX
     Ptr<Blob> wire_data = trunc_data.encodeToWire();////
     char *trunc_co_raw = wire_data->buf();////
     int trunc_co_size = wire_data->size();////

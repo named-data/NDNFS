@@ -34,6 +34,7 @@ using namespace mongo;
 
 //ndn::Wrapper ndn_wrapper;
 const char *db_name = "ndnfs.root";
+ndn::Name signer("/ndn/ucla.edu/qiuhan");
 
 string ndnfs::global_prefix;
 
@@ -84,7 +85,7 @@ static struct fuse_opt ndnfs_opts[] = {
 int main(int argc, char **argv)
 {
     assert((1 << ndnfs::seg_size_shift) == ndnfs::seg_size);
-    ndnfs::global_prefix = "/ndn/ucla.edu/irl/dummy/ndnfs";
+    ndnfs::global_prefix = "/ndn/ucla.edu/qiuhan/dummy/ndnfs";
     
     cout << "main: NDNFS version beta 0.1" << endl;
     

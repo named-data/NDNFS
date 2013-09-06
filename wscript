@@ -41,6 +41,8 @@ def configure(conf):
         except:
             conf.fatal ("Cannot find FUSE libraries")
 
+    conf.check_cfg(package='sqlite3', args=['--cflags', '--libs'], uselib_store='SQLITE3', mandatory=True)
+
     # if Utils.unversioned_sys_platform () == "darwin":
     #     pass
 
@@ -84,7 +86,7 @@ def build (bld):
         target = "ndnfs-server",
         features = ["cxx", "cxxprogram"],
         source = bld.path.ant_glob(['server/server.cc', 'server/servermodule.cc']),
-        use = 'MONGODB BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD CCNX SSL NDNCXX',
+        use = 'MONGODB BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD CCNX SSL NDNCXX SQLITE3',
         includes = ".",
         )
     bld (

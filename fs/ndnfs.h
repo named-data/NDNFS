@@ -40,7 +40,7 @@
 #include <ndn.cxx/security/keychain.h>
 #include <ndn.cxx/security/identity/osx-privatekey-store.h>
 #include <ndn.cxx/common.h>
-#include <ndn.cxx/name.h>
+#include <ndn.cxx/fields/name.h>
 
 #include "config.h"
 
@@ -48,6 +48,7 @@
 extern ndn::Ptr<ndn::security::OSXPrivatekeyStore> privateStoragePtr;
 extern ndn::Ptr<ndn::security::Keychain> keychain;
 extern const char *db_name;
+extern ndn::Name signer;
 
 namespace ndnfs {
     extern std::string global_prefix;

@@ -22,6 +22,17 @@
 #include <ndn.cxx/wrapper/wrapper.h>
 #include <ndn.cxx/fields/name.h>
 #include <ndn.cxx/common.h>
+#include <boost/lexical_cast.hpp>
+#include <ndn.cxx/security/keychain.h>
+#include <ndn.cxx/security/identity/osx-privatekey-store.h>
+#include <ndn.cxx/common.h>
+#include <ndn.cxx/security/certificate/certificate.h>
+#include <sqlite3.h>
+#include <boost/bind.hpp>
+#include <unistd.h>
+
+
+
 
 #include "servermodule.h"
 
@@ -33,7 +44,9 @@ mongo::ScopedDbConnection* c;
 bool child_selector_set;
 
 // create a global handler
-Ptr<Wrapper> handler = Ptr<Wrapper>(new Wrapper());
+Ptr<security::OSXPrivatekeyStore> privateStoragePtr = Ptr<security::OSXPrivatekeyStore>::Create();
+Ptr<security::Keychain> keychain = Ptr<security::Keychain>(new security::Keychain(privateStoragePtr, "/Users/ndn/qiuhan/policy", "/tmp/encryption.db"));//////policy needs to be changed
+Ptr<Wrapper> handler = Ptr<Wrapper>(new Wrapper(keychain));
 
 string global_prefix;
 
@@ -41,15 +54,20 @@ string global_prefix;
 void
 publishAllCert(Ptr<Wrapper> wrapper)
 {
+  cerr << "push all cert!" << endl;
   sqlite3 * fakeDB;
-  int res = sqlite3_open("./fake-data.db", &fakeDB);
+  int res = sqlite3_open("/Users/ndn/qiuhan/NDNFS/fake-data.db", &fakeDB);
   
+  if (res != SQLITE_OK)
+    cerr << "damn it!" << endl;
+
   sqlite3_stmt *stmt;
   sqlite3_prepare_v2 (fakeDB, "SELECT data_blob FROM data", -1, &stmt, 0);
 
   while(sqlite3_step(stmt) == SQLITE_ROW)
     {
       Blob dataBlob(sqlite3_column_blob(stmt, 0), sqlite3_column_bytes(stmt, 0));    
+      cerr << "publish certificate" << endl;
       wrapper->putToCcnd(dataBlob);
     }
 
@@ -73,6 +91,20 @@ int main(int argc, char **argv) {
 	}
     }
     
+    publishAllCert(handler);
+    Name certificatedsk_name("/ndn/ucla.edu/qiuhan/DSK-1378423613/ID-CERT/1378423803");
+    Ptr<security::Certificate> certdsk = keychain->getAnyCertificate(certificatedsk_name);
+    Ptr<Blob> cert0 = certdsk->encodeToWire();
+    cerr << "publish DSK: " << cert0->size() << endl;
+    handler->putToCcnd(*cert0);////////////
+
+    Name certificateksk_name("/ndn/ucla.edu/qiuhan/KSK-1378422677/ID-CERT/1378423300");
+    Ptr<security::Certificate> certksk = keychain->getAnyCertificate(certificateksk_name);
+    Ptr<Blob> cert1 = certksk->encodeToWire();
+    cerr << "publish KSK: " << cert1->size() << endl;
+    handler->putToCcnd(*cert1);////////////
+    
+    
     c = mongo::ScopedDbConnection::getScopedDbConnection("localhost");
     if (c->ok())
 	cout << "main(): connected to local mongo db" << endl;
@@ -84,7 +116,7 @@ int main(int argc, char **argv) {
     }
 
     cout << "serving prefix: " << prefix << endl;
-    Name InterestBaseName = Name(prefix);
+    Name InterestBaseName(prefix);
     global_prefix = InterestBaseName.toUri();
     cout << "global prefix for NDNFS: " << global_prefix << endl;
 
