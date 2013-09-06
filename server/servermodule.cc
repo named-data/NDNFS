@@ -22,15 +22,18 @@
 #include <string>
 #include <vector>
 
-#include <ndn.cxx.h>
 #include <mongo/client/dbclient.h>
 #include <boost/lexical_cast.hpp>
 
 #include "servermodule.h"
+#include <ndn.cxx/wrapper/wrapper.h>
+#include <ndn.cxx/common.h>
 
 using namespace std;
+using namespace ndn;
+using namespace boost;
 
-extern ndn::Wrapper handler;
+extern Ptr<Wrapper> handler;
 extern char* db_name;
 extern mongo::ScopedDbConnection* c;
 extern bool child_selector_set;
@@ -38,7 +41,7 @@ extern bool child_selector_set;
 // callbalck on receiving incoming interest.
 // respond proper content object and comsumes the interest. or simple ignore
 // the interest if no content object found.
-void OnInterest(ndn::InterestPtr interest) {
+void OnInterest(Ptr<Interest> interest) {
     // 1.convert ndn name requested by interest to specific content object 
     // name that can be fetched in NDNFS. this may be done by following the
     // selector rules.
@@ -63,12 +66,12 @@ void OnInterest(ndn::InterestPtr interest) {
 	int len;
 	// use this part to fecth data as binary
 	const char* data = FetchData(ndnfs_name, len);
-	ndn::Bytes bin_data;
+	ndn::Blob bin_data;
 	for (int i = 0; i < len; i++) {
 	    bin_data.push_back(data[i]);
 	}
 	// handler.publishData(interest->getName(), data, len);
-	handler.putToCcnd(bin_data);
+	handler->putToCcnd(bin_data);
 	/**********************************************
 	 // test example: string data
 		string string_data = FetchStringData(ndnfs_name, len);
@@ -134,7 +137,7 @@ const string ndnName2String(ndn::Name name) {
 // oin failure (no match found).
 // this function looks up the underlying NDNFS directly searching for proper 
 // content object name that matches what the interest requires.
-const string NameSelector(ndn::InterestPtr interest) {
+const string NameSelector(Ptr<Interest> interest) {
     string ndn_name("");
     ndn_name = ndnName2String(interest->getName());
   
@@ -191,7 +194,7 @@ struct BSONElementLessThan {
 // the selectors.
 const string Search4PossibleMatch_Rec(mongo::ScopedDbConnection* c, 
 				      mongo::BSONObj current_entry, 
-				      ndn::InterestPtr interest) {
+				      Ptr<Interest> interest) {
     string original_name(current_entry.getStringField("_id"));
     // ASSERT: for each _id specified as absolute path, there is only 1 entry
     // check current entry. if it is a possible match, check for 
@@ -270,7 +273,7 @@ const string Search4PossibleMatch_Rec(mongo::ScopedDbConnection* c,
 	    if (current_cursor->more()) {
 		next_entry = current_cursor->next();
 		ndnfs_name = 
-		    Search4PossibleMatch_Rec(c, next_entry, interest);
+		    Search4PossibleMatch_Rec(c, next_entry, interest);//////////////////
 		if (!ndnfs_name.empty()) return ndnfs_name;
 	    }
 	}
@@ -312,7 +315,7 @@ const string Search4PossibleMatch_Rec(mongo::ScopedDbConnection* c,
 // selectors specified by interest. note if and only if cursor points to 
 // a segment entry can a match be found. skip checking if cursor points to 
 // some other type entry.
-bool CheckSuffix(mongo::BSONObj current_entry, ndn::InterestPtr interest) {
+bool CheckSuffix(mongo::BSONObj current_entry, Ptr<Interest> interest) {
     assert(current_entry.hasField("type"));
 #ifdef DEBUG
     cout << "CheckSuffix(): checking min/maxSuffixComponents" << endl;

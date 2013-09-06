@@ -18,6 +18,8 @@
  */
 
 #include "segment.h"
+#include <ndn.cxx/data.h>
+#include <ndn.cxx/common.h>
 
 #include <boost/lexical_cast.hpp>
 
@@ -26,6 +28,7 @@
 using namespace std;
 using namespace boost;
 using namespace mongo;
+using namespace ndn;
 
 int read_segment(const string& ver_path, ScopedDbConnection *c, const int seg, char *output, const int limit, const int offset)
 {
@@ -48,16 +51,21 @@ int read_segment(const string& ver_path, ScopedDbConnection *c, const int seg, c
 	// This should not happen usually
 	return -1;
     }
+    
+    Ptr<Blob> data_Blob = Create<Blob>(co_raw,co_size);////
+    Ptr<const Blob> data = data_Blob;////
+    Blob & data_content = Data::decodeFromWire(data)->content();///////
+    const char *content = (const char*)data_content.buf();//////
+    
+    //////ndn::ParsedContentObject pco((const unsigned char *)co_raw, co_size);//////
+    //////ndn::BytesPtr co_content = pco.contentPtr();    //////
+    //////const char *content = (const char *)ndn::head(*co_content);//////
 
-    ndn::ParsedContentObject pco((const unsigned char *)co_raw, co_size);
-    ndn::BytesPtr co_content = pco.contentPtr();    
-    const char *content = (const char *)ndn::head(*co_content);
-
-    int copy_len = co_content->size();
+    int copy_len = data_content.size();///////
     if (copy_len > limit)  // Don't write across the limit
 	copy_len = limit;
 
-    memcpy(output, content + offset, copy_len);
+    memcpy(output, content + offset, copy_len);/////
     
     return copy_len;
 }
@@ -73,18 +81,26 @@ int make_segment(const string& file_path, ScopedDbConnection *c, const uint64_t 
     string full_path = ver_path + "/" + segment;
     string full_name = ndnfs::global_prefix + file_path;
     string escaped_name;
-    ndn::Uri::toEscaped(full_name.begin(), full_name.end(), back_inserter(escaped_name));
+    Uri::toEscaped(full_name.begin(), full_name.end(), back_inserter(escaped_name));
 
-    ndn::Name seg_name(escaped_name);
+    Name seg_name(escaped_name);
     seg_name.appendVersion(ver);
     seg_name.appendSeqNum(seg);
 #ifdef NDNFS_DEBUG
     cout << "make_segment: seg_name is " << seg_name.toUri() << endl;
 #endif
 
-    ndn::Bytes co = ndn_wrapper.createContentObject(seg_name, data, len);
-    unsigned char *co_raw = ndn::head(co);
-    int co_size = co.size();
+    Content co(data,len);
+    Data data0;
+    data0.setName(seg_name);
+    data0.setContent(co);
+    keychain->sign(data0,Name('/ndn/ucla.edu/qiuhan'));////XXXXXXXXXXX
+    Ptr<Blob> wire_data = data0.encodeToWire();
+    char* co_raw = wire_data->buf();
+    int co_size = wire_data->size();
+    //ndn::Bytes co = ndn_wrapper.createContentObject(seg_name, data, len);///////////////////////
+    //unsigned char *co_raw = ndn::head(co);////////////////////////////////
+    //int co_size = co.size();/////////////////////////
 
     BSONObj seg_entry = BSONObjBuilder().append("_id", full_path).append("type", ndnfs::segment_type)
 	.appendBinData("data", co_size, BinDataGeneral, co_raw).append("offset", segment_to_size(seg)).obj();
@@ -129,13 +145,25 @@ void truncate_segment(const string& ver_path, ScopedDbConnection *c, const int s
 	const char *co_raw = get_segment_data_raw(seg_entry, co_size);
 	assert(co_size > (int)length);
 
-	ndn::ParsedContentObject pco((const unsigned char *)co_raw, co_size);
-	ndn::BytesPtr co_content = pco.contentPtr();    
-	const char *content = (const char *)ndn::head(*co_content);
-	
-	ndn::Bytes trunc_co = ndn_wrapper.createContentObject(pco.name(), content, length);
-	unsigned char *trunc_co_raw = ndn::head(trunc_co);
-	int trunc_co_size = trunc_co.size();
+    Ptr<Blob> data_Blob = Create<Blob>(co_raw,co_size);////
+    Ptr<const Blob> data_blob = data_Blob;////
+    Ptr<Data> data = Data::decodeFromWire(data_blob);////
+    Blob & data_content = data->content();////
+    const char *content = (const char*)data_content.buf();////
+	////ndn::ParsedContentObject pco((const unsigned char *)co_raw, co_size);
+	////ndn::BytesPtr co_content = pco.contentPtr();    
+	////const char *content = (const char *)ndn::head(*co_content);
+	Content co(content,length);////
+    Data trunc_data;////
+    trunc_data.setName(data->getName());////
+    trunc_data.setContent(co);////
+    keychain->sign(trunc_data);////XXXXXX
+    Ptr<Blob> wire_data = trunc_data.encodeToWire();////
+    char *trunc_co_raw = wire_data->buf();////
+    int trunc_co_size = wire_data->size();////
+	////ndn::Bytes trunc_co = ndn_wrapper.createContentObject(pco.name(), content, length);
+	////unsigned char *trunc_co_raw = ndn::head(trunc_co);
+	////int trunc_co_size = trunc_co.size();
 
 	BSONObj bin_data = BSONObjBuilder().appendBinData("data", trunc_co_size, BinDataGeneral, trunc_co_raw).obj();
 	c->conn().update(db_name, BSON("_id" << seg_path), BSON( "$set" << BSON( "data" << bin_data ) ));

@@ -17,21 +17,44 @@
  * Author: Zhe Wen <wenzhe@cs.ucla.edu>
  */
 
-#include <ndn.cxx.h>
 #include <iostream>
+
+#include <ndn.cxx/wrapper/wrapper.h>
+#include <ndn.cxx/fields/name.h>
+#include <ndn.cxx/common.h>
 
 #include "servermodule.h"
 
 using namespace std;
+using namespace ndn;
 
 const char* db_name = "ndnfs.root";
 mongo::ScopedDbConnection* c;
 bool child_selector_set;
 
 // create a global handler
-ndn::Wrapper handler;
+Ptr<Wrapper> handler = Ptr<Wrapper>(new Wrapper());
 
 string global_prefix;
+
+
+void
+publishAllCert(Ptr<Wrapper> wrapper)
+{
+  sqlite3 * fakeDB;
+  int res = sqlite3_open("./fake-data.db", &fakeDB);
+  
+  sqlite3_stmt *stmt;
+  sqlite3_prepare_v2 (fakeDB, "SELECT data_blob FROM data", -1, &stmt, 0);
+
+  while(sqlite3_step(stmt) == SQLITE_ROW)
+    {
+      Blob dataBlob(sqlite3_column_blob(stmt, 0), sqlite3_column_bytes(stmt, 0));    
+      wrapper->putToCcnd(dataBlob);
+    }
+
+  sqlite3_close (fakeDB);
+}
 
 int main(int argc, char **argv) {
     const char* prefix = "/";
@@ -49,7 +72,7 @@ int main(int argc, char **argv) {
 	    break;
 	}
     }
-
+    
     c = mongo::ScopedDbConnection::getScopedDbConnection("localhost");
     if (c->ok())
 	cout << "main(): connected to local mongo db" << endl;
@@ -61,11 +84,11 @@ int main(int argc, char **argv) {
     }
 
     cout << "serving prefix: " << prefix << endl;
-    ndn::Name InterestBaseName = ndn::Name(prefix);
+    Name InterestBaseName = Name(prefix);
     global_prefix = InterestBaseName.toUri();
     cout << "global prefix for NDNFS: " << global_prefix << endl;
 
-    handler.setInterestFilter(InterestBaseName, OnInterest);
+    handler->setInterestFilter(InterestBaseName, OnInterest);
     while (true) {
 	sleep (1);
     }

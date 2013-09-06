@@ -37,12 +37,16 @@
 #include <mongo/client/dbclient.h>
 
 #include <boost/lexical_cast.hpp>
-
-#include <ndn.cxx.h>
+#include <ndn.cxx/security/keychain.h>
+#include <ndn.cxx/security/identity/osx-privatekey-store.h>
+#include <ndn.cxx/common.h>
+#include <ndn.cxx/name.h>
 
 #include "config.h"
 
-extern ndn::Wrapper ndn_wrapper;
+//extern ndn::Wrapper ndn_wrapper;
+extern ndn::Ptr<ndn::security::OSXPrivatekeyStore> privateStoragePtr;
+extern ndn::Ptr<ndn::security::Keychain> keychain;
 extern const char *db_name;
 
 namespace ndnfs {

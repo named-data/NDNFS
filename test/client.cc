@@ -18,25 +18,38 @@
  */
 
 
-#include <ndn.cxx.h>
+#include <ndn.cxx/common.h>
+#include <ndn.cxx/data.h>
+#include <ndn.cxx/interest.h>
+#include <ndn.cxx/wrapper/wrapper.h>
+#include <ndn.cxx/wrapper/closure.h>
+#include <ndn.cxx/security/keychain.h>
+#include <ndn.cxx/security/identity/osx-privatekey-store.h>
+#include <boost/bind.hpp>
+
+
 #include <iostream>
 
 using namespace std;
+using namespace ndn;
+using namespace boost;
 
-ndn::Wrapper handler;
+Ptr<security::OSXPrivatekeyStore> privateStoragePtr = Ptr<security::OSXPrivatekeyStore>::Create();
+  Ptr<security::Keychain> keychain = Ptr<security::Keychain>(new security::Keychain(privateStoragePtr, "/Users/ndn/qiiuhan/policy", "/tmp/encryption.db"));
+Ptr<Wrapper> handler = Ptr<Wrapper>(new Wrapper(keychain));////////////////////////
 
-void OnData(ndn::Name name, ndn::PcoPtr pco);
-void OnTimeout(ndn::Name name, const ndn::Closure &closure, ndn::InterestPtr origInterest);
+void OnData(Ptr<Data> data);
+void OnTimeout(Ptr<Closure> closure, Ptr<Interest> origInterest);
 
-void OnData(ndn::Name name, ndn::PcoPtr pco) {
-    ndn::BytesPtr content = pco->contentPtr();
-    cout << "data: " << string((char*)ndn::head(*content), content->size()) << endl;
+void OnData(Ptr<Data> data) {
+    Blob & content = data->content();
+    cout << "data: " << string((char*)content.buf(), content.size()) << endl;
 }
 
-void OnTimeout(ndn::Name name, const ndn::Closure &closure, ndn::InterestPtr origInterest) {
+void OnTimeout(Ptr<Closure> closure, Ptr<Interest> origInterest) {
     // re-express interest
     cout << "TIME OUT :(" << endl;
-    handler.sendInterest(*origInterest, closure);
+    handler->sendInterest(origInterest, closure);
 }
 
 void Usage() {
@@ -44,15 +57,21 @@ void Usage() {
     exit(1);
 }
 
+void verifiedError(Ptr<Interest> interest)
+{
+  cout << "unverified" << endl;
+}
+
+
 int main (int argc, char **argv) {
-    ndn::Interest interest = ndn::Interest();
-    interest.setScope(ndn::Interest::SCOPE_LOCAL_HOST);
-    interest.setAnswerOriginKind(0);
+    Ptr<Interest> interestPtr = Ptr<Interest>(new Interest());
+    interestPtr->setScope(Interest::SCOPE_LOCAL_HOST);
+    interestPtr->setAnswerOriginKind(0);
 
     const char* name = "";
-    uint32_t min_suffix_comps = ndn::Interest::ncomps;
-    uint32_t max_suffix_comps = ndn::Interest::ncomps;
-    uint8_t child_selector = ndn::Interest::CHILD_DEFAULT;
+    uint32_t min_suffix_comps = Interest::ncomps;
+    uint32_t max_suffix_comps = Interest::ncomps;
+    uint8_t child_selector = Interest::CHILD_DEFAULT;
 
     int opt;
     while ((opt = getopt(argc, argv, "n:i:a:c:")) != -1) {
@@ -60,30 +79,35 @@ int main (int argc, char **argv) {
 	case 'n': 
 	    name = optarg;
 	    cout << "main(): set name: " << name << endl;
-	    interest.setName(ndn::Name(name));
+	    interestPtr->setName(ndn::Name(name));
 	    break;
 	case 'i': 
 	    min_suffix_comps = atoi(optarg);
 	    cout << "main(): set min suffix components: " << min_suffix_comps << endl;
-	    interest.setMinSuffixComponents(min_suffix_comps);
+	    interestPtr->setMinSuffixComponents(min_suffix_comps);
 	    break;
 	case 'a': 
 	    max_suffix_comps = atoi(optarg);
 	    cout << "main(): set max suffix components: " << max_suffix_comps << endl;
-	    interest.setMaxSuffixComponents(max_suffix_comps);
+	    interestPtr->setMaxSuffixComponents(max_suffix_comps);
 	    break;
 	case 'c': 
 	    child_selector = atoi(optarg);
 	    cout << "main(): set child selector: " << (uint32_t)child_selector << endl;
-	    interest.setChildSelector(child_selector);
+	    interestPtr->setChildSelector(child_selector);
 	    break;
 	default: 
 	    Usage(); 
 	    break;
 	}
     }
-
-    handler.sendInterest(interest, ndn::Closure(OnData, OnTimeout));
+    Ptr<Closure> closure = Ptr<Closure> (new Closure(boost::bind(OnData, _1),
+                                                     boost::bind(OnTimeout, _1, _2),
+                                                     boost::bind(verifiedError, _1),
+                                                     Closure::UnverifiedDataCallback()
+                                                     )
+                                        );
+    handler->sendInterest(interestPtr, closure);
     cout << "Interest sent" << endl;
 
     sleep(3);

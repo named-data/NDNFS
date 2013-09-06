@@ -19,9 +19,13 @@
 
 #include "version.h"
 
+#include <ndn.cxx/data.h>
+#include <ndn.cxx/common.h>
+
 using namespace std;
 using namespace boost;
 using namespace mongo;
+using namespace ndn;
 
 
 int get_version_size(const string& path, ScopedDbConnection *c, const long long ver)
@@ -160,12 +164,18 @@ int write_temp_version(const string& path, ScopedDbConnection *c, BSONObj& file_
 		}
 
 		seg_raw = get_segment_data_raw(seg_entry, seg_len);
-
-		ndn::ParsedContentObject pco((const unsigned char *)seg_raw, seg_len);
-		ndn::BytesPtr seg_content = pco.contentPtr();
-    
-		data_len = (seg_content->size() > tail) ? tail : seg_content->size();
-		data = (const char *)ndn::head(*seg_content);
+        
+        Ptr<Blob> seg_Blob = Create<Blob>(seg_raw, seg_len);////
+        Ptr<const Blob> seg_blob = seg_Blob;////
+        Ptr<Data> seg = Data::decodeFromWire(seg_blob);////
+        Blob & seg_content = seg->content();////
+        data_len = (seg_content.size() > tail) ? tail : seg_content.size();////
+        data = (const char*)seg_content.buf();////
+        
+		////ndn::ParsedContentObject pco((const unsigned char *)seg_raw, seg_len);
+		////ndn::BytesPtr seg_content = pco.contentPtr();
+		////data_len = (seg_content->size() > tail) ? tail : seg_content->size();
+		////data = (const char *)ndn::head(*seg_content);
 		
 		make_segment(path, c, tmp_ver_num, i, false, data, data_len);
 		    
@@ -222,11 +232,19 @@ int write_temp_version(const string& path, ScopedDbConnection *c, BSONObj& file_
 	const char *seg_raw = get_segment_data_raw(seg_entry, seg_len);
 
 	if (seg_len > 0) {
-	    ndn::ParsedContentObject pco((const unsigned char *)seg_raw, seg_len);
-	    ndn::BytesPtr seg_content = pco.contentPtr();
+	    Ptr<Blob> seg_Blob = Create<Blob>(seg_raw, seg_len);////
+        Ptr<const Blob> seg_blob = seg_Blob;////
+        Ptr<Data> seg = Data::decodeFromWire(seg_blob);////
+        Blob & seg_content = seg->content();////
+        
+        assert(tail < seg_content.size());
+        const char *old_data = (const char*)seg_content.buf();
+        
+	    //ndn::ParsedContentObject pco((const unsigned char *)seg_raw, seg_len);
+	    //ndn::BytesPtr seg_content = pco.contentPtr();
 
-	    assert(tail < seg_content->size());
-	    const char *old_data = (const char *)ndn::head(*seg_content);
+	    //assert(tail < seg_content->size());
+	    //const char *old_data = (const char *)ndn::head(*seg_content);
 
 	    int copy_len = ndnfs::seg_size - tail;
 	    if (copy_len > size) {
@@ -337,12 +355,20 @@ int truncate_temp_version(const string& path, ScopedDbConnection *c, BSONObj& fi
 		}
 
 		seg_raw = get_segment_data_raw(seg_entry, seg_len);
-
-		ndn::ParsedContentObject pco((const unsigned char *)seg_raw, seg_len);
-		ndn::BytesPtr seg_content = pco.contentPtr();
+		
+        Ptr<Blob> seg_Blob = Create<Blob>(seg_raw, seg_len);////
+        Ptr<const Blob> seg_blob = seg_Blob;////
+        Ptr<Data> seg = Data::decodeFromWire(seg_blob);////
+        Blob & seg_content = seg->content();////
+        
+        data_len = (seg_content.size() > tail) ? tail : seg_content.size();////
+        data = (const char*)seg_content.buf();////
+        
+		////ndn::ParsedContentObject pco((const unsigned char *)seg_raw, seg_len);
+		////ndn::BytesPtr seg_content = pco.contentPtr();
     
-		data_len = (seg_content->size() > tail) ? tail : seg_content->size();
-		data = (const char *)ndn::head(*seg_content);
+		////data_len = (seg_content->size() > tail) ? tail : seg_content->size();
+		////data = (const char *)ndn::head(*seg_content);
 		
 		make_segment(path, c, tmp_ver_num, i, false, data, data_len);
 		    

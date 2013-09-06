@@ -22,17 +22,23 @@
 #include "file.h"
 #include "attribute.h"
 
+
+//#include <ndn.cxx.h>
 #include <unistd.h>
 #include <sys/types.h>
 
 using namespace std;
 using namespace boost;
 using namespace mongo;
+//using namespace ndn;
 
-ndn::Wrapper ndn_wrapper;
+//ndn::Wrapper ndn_wrapper;
 const char *db_name = "ndnfs.root";
 
 string ndnfs::global_prefix;
+
+ndn::Ptr<ndn::security::OSXPrivatekeyStore> privateStoragePtr = ndn::Ptr<ndn::security::OSXPrivatekeyStore>::Create();
+ndn::Ptr<ndn::security::Keychain> keychain = ndn::Ptr<ndn::security::Keychain>(new ndn::security::Keychain(privateStoragePtr, "/Users/ndn/qiuhan/policy", "/tmp/encryption.db"));//////policy needs to be changed
 
 const int ndnfs::dir_type = 0;
 const int ndnfs::file_type = 1;
@@ -78,8 +84,8 @@ static struct fuse_opt ndnfs_opts[] = {
 int main(int argc, char **argv)
 {
     assert((1 << ndnfs::seg_size_shift) == ndnfs::seg_size);
-    ndnfs::global_prefix = "";
-
+    ndnfs::global_prefix = "/ndn/ucla.edu/irl/dummy/ndnfs";
+    
     cout << "main: NDNFS version beta 0.1" << endl;
     
     // uid and gid will be set to that of the user who starts the fuse process
@@ -96,8 +102,8 @@ int main(int argc, char **argv)
 	if (plen > 1 && conf.prefix[plen - 1] == '/')
 	    conf.prefix[plen - 1] = 0;  // Remove the last '/' in the prefix is there is any
 	ndnfs::global_prefix = string(conf.prefix);
-	cout << "main: global prefix is " << ndnfs::global_prefix << endl;
     }
+    cout << "main: global prefix is " << ndnfs::global_prefix << endl;
 
     cout << "main: test mongodb connection..." << endl;
     
