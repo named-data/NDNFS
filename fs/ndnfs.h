@@ -15,6 +15,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *
  * Author: Wentao Shang <wentao@cs.ucla.edu>
+ *         Qiuhan Ding <dingqiuhan@gmail.com>
  */
 
 #ifndef NDNFS_H
@@ -33,8 +34,7 @@
 #include <sys/time.h>
 
 #include <fuse.h>
-
-#include <mongo/client/dbclient.h>
+#include <sqlite3.h>
 
 #include <boost/lexical_cast.hpp>
 #include <ndn.cxx/security/keychain.h>
@@ -44,7 +44,6 @@
 
 #include "config.h"
 
-//extern ndn::Wrapper ndn_wrapper;
 extern ndn::Ptr<ndn::security::OSXPrivatekeyStore> privateStoragePtr;
 extern ndn::Ptr<ndn::security::Keychain> keychain;
 extern const char *db_name;

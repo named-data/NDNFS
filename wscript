@@ -1,5 +1,5 @@
 # -*- Mode: python; py-indent-offset: 4; indent-tabs-mode: nil; coding: utf-8; -*-
-VERSION='0.1'
+VERSION='0.2'
 APPNAME='NDNFS'
 
 from waflib import Build, Logs, Utils, Task, TaskGen, Configure
@@ -64,9 +64,6 @@ def configure(conf):
     conf.load('boost')
     conf.check_boost(lib='system test iostreams filesystem thread')
 
-    conf.load ('mongodb')
-    conf.check_mongodb ()
-
     conf.check_ccnx (path=conf.options.ccnx_dir)
     conf.define ('CCNX_PATH', conf.env.CCNX_ROOT)
 
@@ -79,23 +76,23 @@ def build (bld):
         target = "ndnfs",
         features = ["cxx", "cxxprogram"],
         source = bld.path.ant_glob(['fs/*.cc']),
-        use = 'MONGODB BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD FUSE CCNX SSL NDNCXX',
+        use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD FUSE CCNX SSL NDNCXX SQLITE3',
         includes = ".",
         )
-    bld (
-        target = "ndnfs-server",
-        features = ["cxx", "cxxprogram"],
-        source = bld.path.ant_glob(['server/server.cc', 'server/servermodule.cc']),
-        use = 'MONGODB BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD CCNX SSL NDNCXX SQLITE3',
-        includes = ".",
-        )
-    bld (
-        target = "test-client",
-        features = ["cxx", "cxxprogram"],
-        source = bld.path.ant_glob(['test/client.cc']),
-        use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD CCNX SSL NDNCXX',
-        includes = ".",
-        )
+    # bld (
+    #     target = "ndnfs-server",
+    #     features = ["cxx", "cxxprogram"],
+    #     source = bld.path.ant_glob(['server/server.cc', 'server/servermodule.cc']),
+    #     use = 'MONGODB BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD CCNX SSL NDNCXX SQLITE3',
+    #     includes = ".",
+    #     )
+    # bld (
+    #     target = "test-client",
+    #     features = ["cxx", "cxxprogram"],
+    #     source = bld.path.ant_glob(['test/client.cc']),
+    #     use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD CCNX SSL NDNCXX',
+    #     includes = ".",
+    #     )
 
 @Configure.conf
 def add_supported_cxxflags(self, cxxflags):
