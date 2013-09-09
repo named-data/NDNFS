@@ -30,8 +30,9 @@ using namespace std;
 using namespace boost;
 
 const char *db_name = "/tmp/ndnfs.db";
-ndn::Name signer("/ndn/ucla.edu/qiuhan");
+sqlite3 *db;
 
+ndn::Name signer("/ndn/ucla.edu/qiuhan");
 string ndnfs::global_prefix;
 
 ndn::Ptr<ndn::security::OSXPrivatekeyStore> privateStoragePtr = ndn::Ptr<ndn::security::OSXPrivatekeyStore>::Create();
@@ -101,7 +102,6 @@ int main(int argc, char **argv)
 
     cout << "main: test sqlite connection..." << endl;
 
-    sqlite3 *db;
     if (sqlite3_open(db_name, &db) == SQLITE_OK) {
         cout << "main: ok" << endl;
     } else {
@@ -122,6 +122,7 @@ CREATE TABLE IF NOT EXISTS                        \n\
     mode        INTEGER,                          \n\
     atime       INTEGER,                          \n\
     mtime       INTEGER,                          \n\
+    size        INTEGER,                          \n\
     PRIMARY KEY (path)                            \n\
   );                                              \n\
 CREATE INDEX id_fs ON file_system (path);         \n\
@@ -139,7 +140,6 @@ CREATE TABLE IF NOT EXISTS                          \n\
     path          TEXT,                             \n\
     version       INTEGER,                          \n\
     tempVersion   INTEGER,                          \n\
-    size          INTEGER,                          \n\
     totalSegment  INTEGER,                          \n\
     PRIMARY KEY (path)                              \n\
   );                                                \n\
@@ -171,8 +171,6 @@ CREATE INDEX id_seg ON file_segments (name);      \n\
 
     cout << "main: ok" << endl;
 
-    sqlite3_close(db);
-    
     create_fuse_operations(&ndnfs_fs_ops);
     
     cout << "main: enter FUSE main loop" << endl << endl;

@@ -21,7 +21,6 @@
 
 using namespace std;
 using namespace boost;
-using namespace mongo;
 
 int ndnfs_getattr(const char *path, struct stat *stbuf)
 {
@@ -30,42 +29,37 @@ int ndnfs_getattr(const char *path, struct stat *stbuf)
 #endif
 
     memset(stbuf, 0, sizeof(struct stat));
-
-    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
-    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
-    if (!cursor->more()) {
-        c->done();
-        delete c;
-        return -ENOENT;
+    
+    int ret = 0;
+    sqlite3_stmt *stmt;
+    sqlite3_prepare_v2(m_db, "SELECT * FROM file_system WHERE path = ?;", -1, &stmt, 0);
+    sqlite3_bind_blob(stmt, 1, path, -1, SQLITE_STATIC);
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+	int type = sqlite3_column_int(stmt, 2);
+	
+	if (type == ndnfs::dir_type) {
+	    stbuf->st_mode = S_IFDIR | sqlite3_column_int(stmt, 3);
+	    stbuf->st_atime = sqlite3_column_int(stmt, 4);
+	    stbuf->st_mtime = sqlite3_column_int(stmt, 5);
+	    stbuf->st_nlink = 1;
+	} else if (type == ndnfs::file_type) {
+	    stbuf->st_mode = S_IFREG | sqlite3_column_int(stmt, 3);
+	    stbuf->st_atime = sqlite3_column_int(stmt, 4);
+	    stbuf->st_mtime = sqlite3_column_int(stmt, 5);
+	    stbuf->st_nlink = 1;
+	    stbuf->st_size = sqlite3_column_int(stmt, 6);
+	} else {
+	    ret = -ENOENT;
+	}
+    
+	// Use the same id for all files and dirs
+	stbuf->st_uid = ndnfs::user_id;
+	stbuf->st_gid = ndnfs::group_id;
     }
     
-    BSONObj entry = cursor->next();  // There should be no two entries with the same id (absolute path)
-    int type = entry.getIntField("type");
-    
-    if (type == ndnfs::dir_type) {
-	stbuf->st_mode = S_IFDIR | entry.getIntField("mode");
-	stbuf->st_atime = entry.getIntField("atime");
-	stbuf->st_mtime = entry.getIntField("mtime");
-        stbuf->st_nlink = 1;
-    } else if (type == ndnfs::file_type) {
-        stbuf->st_mode = S_IFREG | entry.getIntField("mode");
-	stbuf->st_atime = entry.getIntField("atime");
-	stbuf->st_mtime = entry.getIntField("mtime");
-        stbuf->st_nlink = 1;
-        stbuf->st_size = entry.getIntField("size");
-    } else {
-	c->done();
-	delete c;
-	return -ENOENT;
-    }
+    sqlite3_finalize(stmt);
 
-    // Use the same id for all files and dirs
-    stbuf->st_uid = ndnfs::user_id;
-    stbuf->st_gid = ndnfs::group_id;
-    
-    c->done();
-    delete c;
-    return 0;
+    return ret;
 }
 
 
@@ -75,18 +69,23 @@ int ndnfs_chmod(const char *path, mode_t mode)
     cout << "ndnfs_chmod: called with path " << path << endl;
     cout << "ndnfs_chmod: change mode to 0" << std::oct << mode << endl;
 #endif
+    
+    int ret = 0;
+    sqlite3_stmt *stmt;
+    sqlite3_prepare_v2(db, "UPDATE file_system SET mode = ? WHERE path = ?;", -1, &stmt, 0);
+    sqlite3_bind_int(stmt, 1, mode);
+    sqlite3_bind_blob(stmt, 2, path, -1, SQLITE_STATIC);
+    if (sqlite3_step(stmt) == SQLITE_OK) {
+	if (sqlite3_changes(db) == 0)
+	    ret = -ENOENT;
+	else 
+	    ret = 0;
+    } else 
+	ret = -ENOENT;
 
-    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
-    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
-    if (!cursor->more()) {
-        c->done();
-        delete c;
-        return -ENOENT;
-    }
+    sqlite3_finalize(stmt);
 
-    c->conn().update(db_name, BSON("_id" << path), BSON( "$set" << BSON( "mode" << (int)mode ) ));
-
-    return 0;
+    return ret;
 }
 
 

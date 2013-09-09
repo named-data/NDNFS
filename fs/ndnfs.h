@@ -47,6 +47,8 @@
 extern ndn::Ptr<ndn::security::OSXPrivatekeyStore> privateStoragePtr;
 extern ndn::Ptr<ndn::security::Keychain> keychain;
 extern const char *db_name;
+extern sqlite3 *db;
+
 extern ndn::Name signer;
 
 namespace ndnfs {
