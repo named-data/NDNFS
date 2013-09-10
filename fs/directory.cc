@@ -36,7 +36,7 @@ int ndnfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t off
     sqlite3_prepare_v2(db, "SELECT * FROM file_system WHERE parent = ?;", -1, &stmt, 0);
     sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
     while (sqlite3_step(stmt) == SQLITE_ROW) {
-	string path(sqlite3_column_text(db, 0));
+	string path(sqlite3_column_text(stmt, 0));
 	size_t last_comp_pos = path.rfind('/');
 	if (last_comp_pos == std::string::npos)
 	    continue;

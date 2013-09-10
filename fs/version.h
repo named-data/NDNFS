@@ -15,6 +15,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *
  * Author: Wentao Shang <wentao@cs.ucla.edu>
+ *         Qiuhan Ding <dingqiuhan@gmail.com>
  */
 
 #ifndef VERSION_H
@@ -49,7 +50,7 @@ inline uint64_t generate_version() {
 
 //int get_version_size(const std::string& path, mongo::ScopedDbConnection *c, const long long ver);
 
-long long create_temp_version(const std::string& path, mongo::ScopedDbConnection *c);
+//long long create_temp_version(const std::string& path, mongo::ScopedDbConnection *c);
 
 //int get_current_version_size(const std::string& path, mongo::ScopedDbConnection *c, mongo::BSONObj& file_entry);
 
