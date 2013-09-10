@@ -21,7 +21,6 @@
 
 using namespace std;
 using namespace boost;
-using namespace mongo;
 
 int ndnfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi)
 {
@@ -29,33 +28,30 @@ int ndnfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t off
     cout << "ndnfs_readdir: called with path " << path << endl;
 #endif    
 
-    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
-    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
-    if (!cursor->more()) {
-        c->done();
-        delete c;
-        return -ENOENT;
-    }
-    
-    BSONObj entry = cursor->next();
-    int type = entry.getIntField("type");
-    if (type != ndnfs::dir_type) {
-        c->done();
-        delete c;
-        return -ENOENT;
-    }
-    
-    vector< BSONElement > data = entry["data"].Array();
-
+    int count = 0;
     filler(buf, ".", NULL, 0);           /* Current directory (.)  */
     filler(buf, "..", NULL, 0);          /* Parent directory (..)  */
-    for (int i = 0; i < data.size(); i++) {
-        filler(buf, data[i].String().c_str(), NULL, 0);
-    }
+
+    sqlite3_stmt *stmt;
+    sqlite3_prepare_v2(db, "SELECT * FROM file_system WHERE parent = ?;", -1, &stmt, 0);
+    sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+	string path(sqlite3_column_text(db, 0));
+	size_t last_comp_pos = path.rfind('/');
+	if (last_comp_pos == std::string::npos)
+	    continue;
     
-    c->done();
-    delete c;
-    return 0;
+	name = path.substr(last_comp_pos + 1);
+	filler(buf, name.c_str(), NULL, 0);
+	count ++;
+    }
+
+    sqlite3_finalize(stmt);
+
+    if (count == 0)
+        return -ENOENT;
+    else
+	return 0;
 }
 
 int ndnfs_mkdir(const char *path, mode_t mode)
@@ -68,36 +64,34 @@ int ndnfs_mkdir(const char *path, mode_t mode)
     string dir_path, dir_name;
     split_last_component(path, dir_path, dir_name);
     
-    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
-    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
-    if (cursor->more()) {
+    sqlite3_stmt *stmt;
+    sqlite3_prepare_v2(db, "SELECT * FROM file_system WHERE path = ?;", -1, &stmt, 0);
+    sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
+    int res = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+
+    if (res == SQLITE_ROW) {
         // Cannot create file that has conflicting file name
-        c->done();
-        delete c;
         return -EEXIST;
     }
     
-    // Cannot create file without creating necessary folders
-    cursor = c->conn().query(db_name, QUERY("_id" << dir_path));
-    if (!cursor->more()) {
-        c->done();
-        delete c;
-        return -ENOENT;
-    }
-    
-    BSONObj entry = cursor->next();
-    
     // Add new file entry with empty content
     int now = time(0);
-    BSONObj dir_entry = BSONObjBuilder().append("_id", path).append("type", ndnfs::dir_type).append("mode", mode)
-	.append("atime", now).append("mtime", now).append("data", BSONArrayBuilder().arr()).obj();
-    c->conn().insert(db_name, dir_entry);
-    // Append to existing BSON array
-    c->conn().update(db_name, BSON("_id" << dir_path), BSON( "$push" << BSON( "data" << dir_name ) ));
-    
-    c->done();
-    delete c;
-    return 0;
+    sqlite3_prepare_v2(db, "INSERT INTO file_system (path, parent, type, mode, atime, mtime, size) VALUE (?, ?, ?, ?, ?, ?);", -1, &stmt, 0);
+    sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, dir_path.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_int(stmt, 3, ndnfs::dir_type);
+    sqlite3_bind_int(stmt, 4, mode);
+    sqlite3_bind_int(stmt, 5, now);
+    sqlite3_bind_int(stmt, 6, now);
+    sqlite3_bind_int(stmt, 7, -1);  // size
+    res = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+
+    if (res == SQLITE_OK)
+	return 0;
+    else
+	return -EACCES;
 }
 
 
@@ -121,33 +115,32 @@ int ndnfs_rmdir(const char *path)
     string parent_dir_path, dir_name;
     split_last_component(path, parent_dir_path, dir_name);
     
-    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
-    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
-    if (!cursor->more()) {
+    sqlite3_stmt *stmt;
+    sqlite3_prepare_v2(db, "SELECT * FROM file_system WHERE path = ?;", -1, &stmt, 0);
+    sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
+    int res = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+
+    if (res != SQLITE_ROW) {
         // Cannot remove non-existing data
-        c->done();
-        delete c;
         return -EEXIST;
     }
     
-    // Cannot create non-empty dir
-    BSONObj dir_entry = cursor->next();
-    assert(dir_entry.getIntField("type") == ndnfs::dir_type);
-    vector< BSONElement > dir_data = dir_entry["data"].Array();
-    if (dir_data.size() != 0) {
-        c->done();
-        delete c;
+    sqlite3_prepare_v2(db, "SELECT * FROM file_system WHERE parent = ?;", -1, &stmt, 0);
+    sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
+    int res = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+
+    if (res == SQLITE_ROW) {
+	// Cannot remove non-empty dir
         return -ENOTEMPTY;
     }
     
     // Remove dir entry
-    c->conn().remove(db_name, QUERY("_id" << path));
-    
-    // Remove pointer in the parent folder
-    c->conn().update(db_name, BSON("_id" << parent_dir_path), BSON( "$pull" << BSON( "data" << dir_name ) ));
-    c->conn().update(db_name, BSON("_id" << parent_dir_path), BSON( "$set" << BSON( "mtime" << (int)time(0) ) ));
+    sqlite3_prepare_v2(db, "DELETE FROM file_system WHERE path = ?;", -1, &stmt, 0);
+    sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
+    sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
 
-    c->done();
-    delete c;
     return 0;
 }

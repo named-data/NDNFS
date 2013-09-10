@@ -21,7 +21,6 @@
 
 using namespace std;
 using namespace boost;
-using namespace mongo;
 
 int ndnfs_open(const char *path, struct fuse_file_info *fi)
 {
@@ -30,20 +29,23 @@ int ndnfs_open(const char *path, struct fuse_file_info *fi)
     cout << "ndnfs_open: flag is 0x" << std::hex << fi->flags << endl;
 #endif
 
-    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
-    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
-    if (!cursor->more()) {
-        c->done();
-        delete c;
-        return -ENOENT;
+    sqlite3_stmt *stmt;
+    sqlite3_prepare_v2(db, "SELECT type, temp_version FROM file_system WHERE path = ?;", -1, &stmt, 0);
+    sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
+    int res = sqlite3_step(stmt);
+    if (res != SQLITE_ROW) {
+	sqlite3_finalize(stmt);
+	return -ENOENT;
     }
-
-    BSONObj file_entry = cursor->next();
-    if (file_entry.getIntField("type") != ndnfs::file_type) {
-        c->done();
-	delete c;
+    
+    int type = sqlite3_column_int(stmt, 0);
+    uint64_t tmp_ver = sqlite3_column_int64(stmt, 1);
+    if (type != ndnfs::file_type) {
+	sqlite3_finalize(stmt);
 	return -EISDIR;
     }
+
+    sqlite3_finalize(stmt);
 
     // TODO: check file access mode against uid and gid
 
@@ -59,21 +61,25 @@ int ndnfs_open(const char *path, struct fuse_file_info *fi)
 	// If there is already a temp version there, it means that
 	// some one is writing to the file now. We should reject this 
 	// open request.
-	if (get_temp_version(file_entry) != -1) {
-	    c->done();
-	    delete c;
+	if (tmp_ver != -1) {
 	    return -EACCES;
 	}
 	
-	c->conn().update(db_name, BSON("_id" << path), BSON( "$set" << BSON( "temp" << generate_version() ) ));
-	
+	tmp_ver = generate_version();
+	sqlite3_prepare_v2(db, "UPDATE file_system SET temp_version = ? WHERE path = ?;", -1, &stmt, 0);
+	sqlite3_bind_int64(stmt, 1, tmp_ver);
+	sqlite3_bind_text(stmt, 2, path, -1, SQLITE_STATIC);
+	res = sqlite3_step(stmt);
+	sqlite3_finalize(stmt);
+
+	if (res != SQLITE_OK)
+	    return -EACCES;
+
 	break;
     default:
 	break;
     }
-    
-    c->done();
-    delete c;
+
     return 0;
 }
 
@@ -85,44 +91,66 @@ int ndnfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
     cout << "ndnfs_create: create file with flag 0x" << std::hex << fi->flags << " and mode 0" << std::oct << mode << endl;
 #endif
 
-    string file_path(path);
     string dir_path, file_name;
     split_last_component(file_path, dir_path, file_name);
     
-    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
-    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << file_path));
-    if (cursor->more()) {
+    sqlite3_stmt *stmt;
+    sqlite3_prepare_v2(db, "SELECT * FROM file_system WHERE path = ?;", -1, &stmt, 0);
+    sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
+    int res = sqlite3_step(stmt);
+    if (res == SQLITE_ROW) {
         // Cannot create file that has conflicting file name
-        c->done();
-        delete c;
-        return -EEXIST;
+	sqlite3_finalize(stmt);
+	return -ENOENT;
     }
     
-    // Cannot create file without creating necessary folders in advance
-    cursor = c->conn().query(db_name, QUERY("_id" << dir_path));
-    if (!cursor->more()) {
-        c->done();
-        delete c;
-        return -ENOENT;
-    }
+    sqlite3_finalize(stmt);
+
+    //XXX: We don't check this for now.
+    // // Cannot create file without creating necessary folders in advance
+    // cursor = c->conn().query(db_name, QUERY("_id" << dir_path));
+    // if (!cursor->more()) {
+    //     c->done();
+    //     delete c;
+    //     return -ENOENT;
+    // }
     
     // Generate temparary version for the new file
-    long long tmp_ver = generate_version();
+    uint64_t tmp_ver = generate_version();
     
-    // Create new file entry with empty version list and a temp version
-    int now = time(0);
-    BSONObj file_entry = BSONObjBuilder().append("_id", file_path).append("type", ndnfs::file_type).append("mode", mode).append("temp", tmp_ver)
-	.append("size", 0).append("atime", now).append("mtime", now).append("data", (long long)-1).obj();
+    // Create temp version for the new file
+    sqlite3_prepare_v2(db, "INSERT INTO file_versions (path, version, size, totalSegments) VALUE (?, ?, ?, ?);", -1, &stmt, 0);
+    sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
+    sqlite3_bind_int(stmt, 2, tmp_ver);
+    sqlite3_bind_int(stmt, 3, 0);
+    sqlite3_bind_int(stmt, 4, 0);
+    sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
 
     // Add the file entry to database
-    c->conn().insert(db_name, file_entry);
+    int now = time(0);
+    sqlite3_prepare_v2(db, 
+		       "INSERT INTO file_system (path, parent, type, mode, atime, mtime, size, current_version, temp_version) VALUE (?, ?, ?, ?, ?, ?, ?, ?, ?);", 
+		       -1, &stmt, 0);
+    sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, dir_path.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_int(stmt, 3, ndnfs::dir_type);
+    sqlite3_bind_int(stmt, 4, mode);
+    sqlite3_bind_int(stmt, 5, now);
+    sqlite3_bind_int(stmt, 6, now);
+    sqlite3_bind_int(stmt, 7, 0);  // size
+    sqlite3_bind_int64(stmt, 8, -1);  // current version
+    sqlite3_bind_int64(stmt, 9, tmp_ver);  // temp version
+    sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
 
-    // Append file name to existing BSON array of the parent folder
-    c->conn().update(db_name, BSON("_id" << dir_path), BSON( "$push" << BSON( "data" << file_name ) ));
-    c->conn().update(db_name, BSON("_id" << dir_path), BSON( "$set" << BSON( "mtime" << now ) ));
+    // Update mtime for parent folder
+    sqlite3_prepare_v2(db, "UPDATE file_system SET mtime = ? WHERE path = ?;", -1, &stmt, 0);
+    sqlite3_bind_int(stmt, 1, now);
+    sqlite3_bind_text(stmt, 2, dir_path.c_str(), -1, SQLITE_STATIC);
+    sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
     
-    c->done();
-    delete c;
     return 0;
 }
 
@@ -134,26 +162,32 @@ int ndnfs_read(const char *path, char *buf, size_t size, off_t offset, struct fu
     cout << "ndnfs_read: start read at offset " << std::dec << offset << " with size " << size << endl;
 #endif
 
-    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
-    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
-    if (!cursor->more()) {
-        c->done();
-        delete c;
-        return -ENOENT;
+    sqlite3_stmt *stmt;
+    sqlite3_prepare_v2(db, "SELECT type, current_version FROM file_system WHERE path = ?;", -1, &stmt, 0);
+    sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
+    int res = sqlite3_step(stmt);
+    if (res != SQLITE_ROW) {
+	sqlite3_finalize(stmt);
+	return -ENOENT;
     }
     
-    BSONObj entry = cursor->next();
-    if (entry.getIntField("type") != ndnfs::file_type) {
-        c->done();
-        delete c;
+    int type = sqlite3_column_int(stmt, 0);
+    uint64_t curr_ver = sqlite3_column_int64(stmt, 1);
+    if (type != ndnfs::file_type) {
+	sqlite3_finalize(stmt);
         return -EINVAL;
     }
 
-    int size_read = read_current_version(path, c, entry, buf, size, offset);
-    c->conn().update(db_name, BSON("_id" << path), BSON( "$set" << BSON( "atime" << (int)time(0) ) ));
-    
-    c->done();
-    delete c;
+    sqlite3_finalize(stmt);
+
+    int size_read = read_current_version(path, c, curr_ver, buf, size, offset);
+
+    sqlite3_prepare_v2(db, "UPDATE file_system SET atime = ? WHERE path = ?;", -1, &stmt, 0);
+    sqlite3_bind_int(stmt, 1, (int)time(0));
+    sqlite3_bind_text(stmt, 2, path, -1, SQLITE_STATIC);
+    sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+
     return size_read;
 }
 
@@ -165,34 +199,37 @@ int ndnfs_write(const char *path, const char *buf, size_t size, off_t offset, st
     cout << "ndnfs_write: start write at offset " << std::dec << offset << " with size " << size << endl;
 #endif
 
-    string file_path(path);
-    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
-    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << file_path));
-    if (!cursor->more()) {
-        c->done();
-        delete c;
-        return -EINVAL;
+    sqlite3_stmt *stmt;
+    sqlite3_prepare_v2(db, "SELECT type, current_version, temp_version FROM file_system WHERE path = ?;", -1, &stmt, 0);
+    sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
+    int res = sqlite3_step(stmt);
+    if (res != SQLITE_ROW) {
+	sqlite3_finalize(stmt);
+	return -ENOENT;
     }
     
-    BSONObj entry = cursor->next();
-    if (entry.getIntField("type") != ndnfs::file_type) {
-        c->done();
-        delete c;
+    int type = sqlite3_column_int(stmt, 0);
+    uint64_t curr_ver = sqlite3_column_int64(stmt, 1);
+    uint64_t temp_ver = sqlite3_column_int64(stmt, 2);
+    if (type != ndnfs::file_type) {
+	sqlite3_finalize(stmt);
         return -EINVAL;
     }
 
+    sqlite3_finalize(stmt);
+
     // Write data to a new version of the file
-    int written = write_temp_version(file_path, c, entry, buf, size, offset);
+    int written = write_temp_version(file_path, curr_ver, temp_ver, buf, size, offset);
     if (written < 0) {
-	c->done();
-	delete c;
 	return -EINVAL;
     }
 
-    c->conn().update(db_name, BSON("_id" << file_path), BSON( "$set" << BSON( "mtime" << (int)time(0) ) ));
-    
-    c->done();
-    delete c;
+    sqlite3_prepare_v2(db, "UPDATE file_system SET mtime = ? WHERE path = ?;", -1, &stmt, 0);
+    sqlite3_bind_int(stmt, 1, (int)time(0));
+    sqlite3_bind_text(stmt, 2, path, -1, SQLITE_STATIC);
+    sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+
     return written;  // return the number of tyes written on success
 }
 
@@ -204,26 +241,33 @@ int ndnfs_truncate(const char *path, off_t length)
     cout << "ndnfs_truncate: truncate to length " << std::dec << length << endl;
 #endif
 
-    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
-    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
-    if (!cursor->more()) {
-        c->done();
-        delete c;     
+    sqlite3_stmt *stmt;
+    sqlite3_prepare_v2(db, "SELECT type, current_version, temp_version FROM file_system WHERE path = ?;", -1, &stmt, 0);
+    sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
+    int res = sqlite3_step(stmt);
+    if (res != SQLITE_ROW) {
+	sqlite3_finalize(stmt);
 	return -ENOENT;
     }
     
-    BSONObj file_entry = cursor->next();
-    if (file_entry.getIntField("type") != ndnfs::file_type) {
-        c->done();
-	delete c;
-	return -EISDIR;
+    int type = sqlite3_column_int(stmt, 0);
+    uint64_t curr_ver = sqlite3_column_int64(stmt, 1);
+    uint64_t temp_ver = sqlite3_column_int64(stmt, 2);
+    if (type != ndnfs::file_type) {
+	sqlite3_finalize(stmt);
+        return -EINVAL;
     }
 
-    int ret = truncate_temp_version(path, c, file_entry, length);
-    c->conn().update(db_name, BSON("_id" << path), BSON( "$set" << BSON( "mtime" << (int)time(0) ) ));
+    sqlite3_finalize(stmt);
 
-    c->done();
-    delete c;   
+    int ret = truncate_temp_version(path, curr_ver, temp_ver, length);
+
+    sqlite3_prepare_v2(db, "UPDATE file_system SET mtime = ? WHERE path = ?;", -1, &stmt, 0);
+    sqlite3_bind_int(stmt, 1, (int)time(0));
+    sqlite3_bind_text(stmt, 2, path, -1, SQLITE_STATIC);
+    sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+
     return ret;
 }
 
@@ -234,24 +278,26 @@ int ndnfs_unlink(const char *path)
     cout << "ndnfs_unlink: called with path " << path << endl;
 #endif
 
-    string file_path(path);
     string dir_path, file_name;
-    split_last_component(file_path, dir_path, file_name);
-    
-    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
-    
-    // First remove pointer in the folder that holds the file
-    c->conn().update(db_name, BSON("_id" << dir_path), BSON( "$pull" << BSON( "data" << file_name ) ));
-    c->conn().update(db_name, BSON("_id" << dir_path), BSON( "$set" << BSON( "mtime" << (int)time(0) ) ));
-    
-    // Then remove all the versions under the file entry
-    remove_versions(file_path, c);
-    
-    // Finally, remove file entry
-    c->conn().remove(db_name, QUERY("_id" << path));
+    split_last_component(path, dir_path, file_name);
 
-    c->done();
-    delete c;
+    // First, remove file entry
+    sqlite3_stmt *stmt;
+    sqlite3_prepare_v2(db, "DELETE FROM file_system WHERE type=1 AND path = ?;", -1, &stmt, 0);
+    sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
+    sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    
+    // Then, remove all the versions under the file entry (both current and temp)
+    remove_versions(path);
+    
+    // Finally, update parent directory mtime
+    sqlite3_prepare_v2(db, "UPDATE file_system SET mtime = ? WHERE path = ?;", -1, &stmt, 0);
+    sqlite3_bind_int(stmt, 1, (int)time(0));
+    sqlite3_bind_text(stmt, 2, dir_path.c_str(), -1, SQLITE_STATIC);
+    sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+
     return 0;
 }
 
@@ -261,20 +307,24 @@ int ndnfs_release(const char *path, struct fuse_file_info *fi)
     cout << "ndnfs_release: called with path " << path << " and flag " << std::hex << fi->flags << endl;
 #endif
 
-    ScopedDbConnection *c = ScopedDbConnection::getScopedDbConnection("localhost");
-    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << path));
-    if (!cursor->more()) {
-	c->done();
-        delete c;
-        return -EEXIST;
+    sqlite3_stmt *stmt;
+    sqlite3_prepare_v2(db, "SELECT type, current_version, temp_version FROM file_system WHERE path = ?;", -1, &stmt, 0);
+    sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
+    int res = sqlite3_step(stmt);
+    if (res != SQLITE_ROW) {
+	sqlite3_finalize(stmt);
+	return -ENOENT;
     }
     
-    BSONObj file_entry = cursor->next();
-    if (file_entry.getIntField("type") != ndnfs::file_type) {
-        c->done();
-	delete c;
-	return -1;
+    int type = sqlite3_column_int(stmt, 0);
+    uint64_t curr_ver = sqlite3_column_int64(stmt, 1);
+    uint64_t temp_ver = sqlite3_column_int64(stmt, 2);
+    if (type != ndnfs::file_type) {
+	sqlite3_finalize(stmt);
+        return -EINVAL;
     }
+
+    sqlite3_finalize(stmt);
 
 /*
   In FUSE design, if the file is created with create() call,
@@ -283,35 +333,43 @@ int ndnfs_release(const char *path, struct fuse_file_info *fi)
   the file is just created or opened in read only mode.
  */
 
-    long long curr_ver_num = get_current_version(file_entry);
     // Check open flags
-    if (((fi->flags & O_ACCMODE) != O_RDONLY) || curr_ver_num == -1) {
+    if (((fi->flags & O_ACCMODE) != O_RDONLY) || curr_ver == -1) {
         // This file is either opened with write access or just created
-        long long tmp_ver_num = get_temp_version(file_entry);
-        if (tmp_ver_num == -1) {
-	    c->done();
-	    delete c;
+        if (tmp_ver == -1) {
 	    return -1;
 	}
 	
-	string file_path(path);
-	string tmp_ver_path = file_path + "/" + lexical_cast<string> (tmp_ver_num);
-	cursor = c->conn().query(db_name, QUERY("_id" << tmp_ver_path));
-	if (!cursor->more()) {
+	sqlite3_prepare_v2(db, "SELECT * FROM file_versions WHERE path = ? AND version = ?;", -1, &stmt, 0);
+	sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
+	sqlite3_bind_int64(stmt, 2, tmp_ver);
+	int res = sqlite3_step(stmt);
+	if (res != SQLITE_ROW) {
 	    // Nothing is written into this file so the temp version does not exist
 	    // In this case we simply keep the current version as it is and reset temp version number
-	    c->conn().update(db_name, BSON("_id" << path), BSON( "$set" << BSON( "temp" << (long long)-1) ));
+	    sqlite3_stmt *stmt2;
+	    sqlite3_prepare_v2(db, "UPDATE file_system SET temp_version = ? WHERE path = ?;", -1, &stmt2, 0);
+	    sqlite3_bind_int64(stmt2, 1, (uint64_t)-1);
+	    sqlite3_bind_text(stmt2, 2, path, -1, SQLITE_STATIC);
+	    sqlite3_step(stmt2);
+	    sqlite3_finalize(stmt2);
 	} else {
 	    // Update version number and remove old version
-	    int size = get_version_size(path, c, tmp_ver_num);
-	    c->conn().update(db_name, BSON("_id" << path), BSON( "$set" << BSON( "size" << size << "data" << tmp_ver_num << "temp" << (long long)-1) ));
-	    string old_ver_path = file_path + "/" + lexical_cast<string> (curr_ver_num);
-	    remove_version(old_ver_path, c);
-	    //c->conn().update(db_name, BSON("_id" << path), BSON( "$set" << BSON( "mtime" << (int)time(0) ) ));
+	    int size = sqlite3_column_int(stmt, 2);
+
+	    sqlite3_stmt *stmt2;
+	    sqlite3_prepare_v2(db, "UPDATE file_system SET size = ?, current_version = ?, temp_version = ? WHERE path = ?;", -1, &stmt2, 0);
+	    sqlite3_bind_int(stmt2, 1, size);
+	    sqlite3_bind_int64(stmt2, 2, temp_ver);  // current_version
+	    sqlite3_bind_int64(stmt2, 3, (uint64_t)-1);  // temp_version
+	    sqlite3_bind_text(stmt2, 4, path, -1, SQLITE_STATIC);
+	    sqlite3_step(stmt2);
+	    sqlite3_finalize(stmt2);
+
+	    remove_version(path, curr_ver);
 	}
+	sqlite3_finalize(stmt);
     }
 
-    c->done();
-    delete c;
     return 0;
 }

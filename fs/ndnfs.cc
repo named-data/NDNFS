@@ -116,13 +116,15 @@ int main(int argc, char **argv)
     const char* INIT_FS_TABLE = "\
 CREATE TABLE IF NOT EXISTS                        \n\
   file_system(                                    \n\
-    path        TEXT,                             \n\
-    parent      TEXT,                             \n\
-    type        INTEGER,                          \n\
-    mode        INTEGER,                          \n\
-    atime       INTEGER,                          \n\
-    mtime       INTEGER,                          \n\
-    size        INTEGER,                          \n\
+    path                 TEXT NOT NULL,           \n\
+    parent               TEXT NOT NULL,           \n\
+    type                 INTEGER,                 \n\
+    mode                 INTEGER,                 \n\
+    atime                INTEGER,                 \n\
+    mtime                INTEGER,                 \n\
+    size                 INTEGER,                 \n\
+    current_version      INTEGER,                 \n\
+    temp_version         INTEGER,                 \n\
     PRIMARY KEY (path)                            \n\
   );                                              \n\
 CREATE INDEX id_fs ON file_system (path);         \n\
@@ -135,15 +137,15 @@ CREATE INDEX id_fs ON file_system (path);         \n\
     }
 
     const char* INIT_VER_TABLE = "\
-CREATE TABLE IF NOT EXISTS                          \n\
-  file_versions(                                    \n\
-    path          TEXT,                             \n\
-    version       INTEGER,                          \n\
-    tempVersion   INTEGER,                          \n\
-    totalSegment  INTEGER,                          \n\
-    PRIMARY KEY (path)                              \n\
-  );                                                \n\
-CREATE INDEX id_ver ON file_versions (path);        \n\
+CREATE TABLE IF NOT EXISTS                                   \n\
+  file_versions(                                             \n\
+    path          TEXT NOT NULL,                             \n\
+    version       INTEGER,                                   \n\
+    size          INTEGER,                                   \n\
+    totalSegments INTEGER,                                   \n\
+    PRIMARY KEY (path)                                       \n\
+  );                                                         \n\
+CREATE INDEX id_ver ON file_versions (path, version);        \n\
 ";
 
     if (sqlite3_exec(db, INIT_VER_TABLE, NULL, NULL, NULL) != SQLITE_OK) {
@@ -155,7 +157,7 @@ CREATE INDEX id_ver ON file_versions (path);        \n\
     const char* INIT_SEG_TABLE = "\
 CREATE TABLE IF NOT EXISTS                        \n\
   file_segments(                                  \n\
-    name        TEXT,                             \n\
+    name        TEXT NOT NULL,                    \n\
     data        BLOB NOT NULL,                    \n\
     offset      INTEGER,                          \n\
     PRIMARY KEY (name)                            \n\
