@@ -30,15 +30,15 @@
 
 using namespace std;
 using namespace boost;
-using namespace mongo;
 using namespace ndn;
 
-int read_segment(const string& ver_path, ScopedDbConnection *c, const int seg, char *output, const int limit, const int offset)
+int read_segment(const string& ver_path, const int seg, char *output, const int limit, const int offset)
 {
     string segment = lexical_cast<string> (seg);
     string seg_path = ver_path + "/" + segment;
 
-    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << seg_path));
+    /*
+      auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << seg_path));
     if (!cursor->more()) {
 	return -1;
     }
@@ -47,22 +47,31 @@ int read_segment(const string& ver_path, ScopedDbConnection *c, const int seg, c
     if (seg_entry.getIntField("type") != ndnfs::segment_type) {
 	return -1;
     }
+    
 
     int co_size;
+    
     const char *co_raw = get_segment_data_raw(seg_entry, co_size);
     if (co_size == 0) {
 	// This should not happen usually
 	return -1;
+	}*/
+    const char*co_raw;
+    int co_size;
+    sqlite3_stmt *stmt;
+    sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE name = ?;", -1, &stmt, 0);
+    sqlite3_bind_text(stmt, 1, seg_path.c_str(), -1, SQLITE_STATIC);
+    if (sqlite3_step(stmt) == SQLITE_ROW) {//////
+        co_raw = sqlite3_column_text(stmt,1);
+	co_size = sqlite3_column_bytes(stmt,1);
     }
+
     
     Ptr<Blob> data_Blob = Create<Blob>(co_raw,co_size);////
     Ptr<const Blob> data = data_Blob;////
     Blob & data_content = Data::decodeFromWire(data)->content();///////
     const char *content = (const char*)data_content.buf();//////
     
-    //////ndn::ParsedContentObject pco((const unsigned char *)co_raw, co_size);//////
-    //////ndn::BytesPtr co_content = pco.contentPtr();    //////
-    //////const char *content = (const char *)ndn::head(*co_content);//////
 
     int copy_len = data_content.size();///////
     if (copy_len > limit)  // Don't write across the limit
@@ -70,11 +79,13 @@ int read_segment(const string& ver_path, ScopedDbConnection *c, const int seg, c
 
     memcpy(output, content + offset, copy_len);/////
     
+    sqlite3_finalize(stmt);
+    
     return copy_len;
 }
 
 
-int make_segment(const string& file_path, ScopedDbConnection *c, const uint64_t ver, const int seg, const bool final, const char *data, const int len)
+int make_segment(const string& file_path, const uint64_t ver, const int seg, const bool final, const char *data, const int len)
 {
     assert(len > 0);
 
@@ -110,17 +121,30 @@ int make_segment(const string& file_path, ScopedDbConnection *c, const uint64_t 
     //unsigned char *co_raw = ndn::head(co);////////////////////////////////
     //int co_size = co.size();/////////////////////////
 
+    sqlite3_stmt *stmt;
+    sqlite3_prepare_v2(db, "INSERT INTO file_segments (name,data,offset) VALUES (?,?,?);");
+    sqlite3_bind_blob(stmt,1,full_path.c_str(),-1,SQLITE_STATIC);
+    sqlite3_bind_blob(stmt,2,co_raw,co_size,SQLITE_STATIC);
+    sqlite3_bind_int(stmt,3,segment_to_size(seg));
+    if (sqlite3_step(stmt) == SQLITE_OK) {
+    }
+    sqlite3_finalize(stmt);
+
+    /*
     BSONObj seg_entry = BSONObjBuilder().append("_id", full_path).append("type", ndnfs::segment_type)
 	.appendBinData("data", co_size, BinDataGeneral, co_raw).append("offset", segment_to_size(seg)).obj();
 
     // Add segment entry to database
     c->conn().insert(db_name, seg_entry);
+    */
+    
 
     return 0;
 }
 
-void remove_segments(const string& ver_path, ScopedDbConnection *c, const int start/* = 0 */)
+void remove_segments(const string& ver_path, const int start/* = 0 */)
 {
+    /*
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << ver_path));
     if (!cursor->more()) {
         return;
@@ -133,47 +157,73 @@ void remove_segments(const string& ver_path, ScopedDbConnection *c, const int st
         string seg_path = ver_path + "/" + lexical_cast<string> (segs[i].Int());
 	c->conn().remove(db_name, QUERY("_id" << seg_path));
     }
+    */
+    sqlite3_stmt *stmt;
+    for (int i = start; i < segs.size(); i++) {
+        string seg_path = ver_path + "/" + lexical_cast<string> (segs[i].Int());
+	sqlite3_prepare_v2(db, "DELETE FROM file_segments WHERE name = ?;");
+	sqlite3_bind_blob(stmt, 1, seg_path.c_str(), -1, SQLITE_STATIC);
+	if(sqlite3_step(stmt) == SQLITE_OK) {
+	}
+	sqlite3_finalize(stmt);
+    }
 }
 
-void truncate_segment(const string& ver_path, ScopedDbConnection *c, const int seg, const off_t length)
+void truncate_segment(const string& ver_path, const int seg, const off_t length)
 {
     string seg_path = ver_path + "/" + lexical_cast<string> (seg);
+    /*
     auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << seg_path));
     if (!cursor->more()) {
         return;
     }
+    */
+    
+    sqlite3_stmt *stmt;
+    sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE name = ?;" -1, &stmt, 0);
+    sqlite3_bind_blob(stmt, 1, seg_path.c_str(), -1, SQLITE_STATIC);
+    if(sqlite3_step(stmt) == SQLITE_ROW) {
+        if (length == 0) {
+	  sqlite3_finalize(stmt);
+	  sqlite3_prepare_v2(db, "UPDATE file_segments SET data = ? WHERE name = ?;" -1 &stmt, 0);
+	  sqlite3_bind_blob(stmt, 1, NULL, -1, SQLITE_STATIC);
+	  sqlite3_bind_blob(stmt, 2, seg_path.c_str(), -1, SQLITE_STATIC);
+	  if(sqlite3_step(stmt) == SQLITE_OK) {}
+	  sqlite3_finalize(stmt);
+	  /*BSONObj bin_data = BSONObjBuilder().appendBinData("data", 0, BinDataGeneral, NULL).obj();
+	    c->conn().update(db_name, BSON("_id" << seg_path), BSON( "$set" << BSON( "data" << bin_data ) ));*/
+	} else {
+	  /*BSONObj seg_entry = cursor->next();*/
 
-    if (length == 0) {
-	BSONObj bin_data = BSONObjBuilder().appendBinData("data", 0, BinDataGeneral, NULL).obj();
-	c->conn().update(db_name, BSON("_id" << seg_path), BSON( "$set" << BSON( "data" << bin_data ) ));
-    } else {
-	BSONObj seg_entry = cursor->next();
+	  const char* co_raw = sqlite3_column_text(stmt,1);
+	  int co_size = sqlite3_column_bytes(stmt,1);
 
-	int co_size;
-	const char *co_raw = get_segment_data_raw(seg_entry, co_size);
-	assert(co_size > (int)length);
+	  /*const char *co_raw = get_segment_data_raw(seg_entry, co_size);*/
+	  assert(co_size > (int)length);
 
-    Ptr<Blob> data_Blob = Create<Blob>(co_raw,co_size);////
-    Ptr<const Blob> data_blob = data_Blob;////
-    Ptr<Data> data = Data::decodeFromWire(data_blob);////
-    Blob & data_content = data->content();////
-    const char *content = (const char*)data_content.buf();////
-	////ndn::ParsedContentObject pco((const unsigned char *)co_raw, co_size);
-	////ndn::BytesPtr co_content = pco.contentPtr();    
-	////const char *content = (const char *)ndn::head(*co_content);
-	Content co(content,length);////
-    Data trunc_data;////
-    trunc_data.setName(data->getName());////
-    trunc_data.setContent(co);////
-    keychain->sign(trunc_data,signer);////XXXXXX
-    Ptr<Blob> wire_data = trunc_data.encodeToWire();////
-    char *trunc_co_raw = wire_data->buf();////
-    int trunc_co_size = wire_data->size();////
-	////ndn::Bytes trunc_co = ndn_wrapper.createContentObject(pco.name(), content, length);
-	////unsigned char *trunc_co_raw = ndn::head(trunc_co);
-	////int trunc_co_size = trunc_co.size();
+	  Ptr<Blob> data_Blob = Create<Blob>(co_raw,co_size);////
+	  Ptr<const Blob> data_blob = data_Blob;////
+	  Ptr<Data> data = Data::decodeFromWire(data_blob);////
+	  Blob & data_content = data->content();////
+	  const char *content = (const char*)data_content.buf();////
 
-	BSONObj bin_data = BSONObjBuilder().appendBinData("data", trunc_co_size, BinDataGeneral, trunc_co_raw).obj();
-	c->conn().update(db_name, BSON("_id" << seg_path), BSON( "$set" << BSON( "data" << bin_data ) ));
+	  Content co(content,length);////
+	  Data trunc_data;////
+	  trunc_data.setName(data->getName());////
+	  trunc_data.setContent(co);////
+	  keychain->sign(trunc_data,signer);////XXXXXX
+	  Ptr<Blob> wire_data = trunc_data.encodeToWire();////
+	  char *trunc_co_raw = wire_data->buf();////
+	  int trunc_co_size = wire_data->size();////
+
+	  sqlite3_finalize(stmt);
+	  sqlite3_prepare_v2(db, "UPDATE file_segments SET data = ? WHERE name = ?;" -1 &stmt, 0);
+	  sqlite3_bind_blob(stmt, 1, trunc_co_raw, trunc_co_size, SQLITE_STATIC);
+	  sqlite3_bind_blob(stmt, 2, seg_path.c_str(), -1, SQLITE_STATIC);
+	  if(sqlite3_step(stmt) == SQLITE_OK) {}
+	  sqlite3_finalize(stmt);
+	  /*BSONObj bin_data = BSONObjBuilder().appendBinData("data", trunc_co_size, BinDataGeneral, trunc_co_raw).obj();
+	    c->conn().update(db_name, BSON("_id" << seg_path), BSON( "$set" << BSON( "data" << bin_data ) ));*/
+	}
     }
 }
