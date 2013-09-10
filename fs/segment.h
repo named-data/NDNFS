@@ -33,17 +33,17 @@ inline int segment_to_size(int seg)
     return (seg << ndnfs::seg_size_shift);
 }
 
-inline const char* get_segment_data_raw(mongo::BSONObj& seg_entry, int& data_len)
+/*inline const char* get_segment_data_raw(mongo::BSONObj& seg_entry, int& data_len)
 {
     return seg_entry.getField("data").binData(data_len);
-}
+    }*/
 
-int read_segment(const std::string& ver_path, mongo::ScopedDbConnection *c, const int seg, char *output, const int limit, const int offset);
+int read_segment(const std::string& ver_path, const int seg, char *output, const int limit, const int offset);
 
-int make_segment(const std::string& file_path, mongo::ScopedDbConnection *c, const uint64_t ver, const int seg, const bool final, const char *data, const int len);
+int make_segment(const std::string& file_path, const uint64_t ver, const int seg, const bool final, const char *data, const int len);
 
-void remove_segments(const std::string& ver_path, mongo::ScopedDbConnection *c, const int start = 0);
+void remove_segments(const std::string& ver_path, const int start = 0);
 
-void truncate_segment(const std::string& ver_path, mongo::ScopedDbConnection *c, const int seg, const off_t length);
+void truncate_segment(const std::string& ver_path, const int seg, const off_t length);
 
 #endif

@@ -24,11 +24,10 @@
 
 using namespace std;
 using namespace boost;
-using namespace mongo;
 using namespace ndn;
 
 
-int get_version_size(const string& path, ScopedDbConnection *c, const long long ver)
+/*int get_version_size(const string& path, const long long ver)
 {
     string ver_path = path + "/" + lexical_cast<string> (ver);
 
@@ -61,12 +60,12 @@ int get_current_version_size(const string& path, ScopedDbConnection *c, BSONObj&
     }
     
     return get_version_size(ver_entry);
-}
+}*/
 
 
-int read_version(const string& ver_path, ScopedDbConnection *c, char *output, size_t size, off_t offset)
+int read_version(const string& ver_path, char *output, size_t size, off_t offset)
 {
-    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << ver_path));
+  /*auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << ver_path));
     if (!cursor->more()) {
 	return -ENOENT;
     }
@@ -74,9 +73,17 @@ int read_version(const string& ver_path, ScopedDbConnection *c, char *output, si
     BSONObj ver_entry = cursor->next();
     if (ver_entry.getIntField("type") != ndnfs::version_type) {
 	return -EINVAL;
+	}*/
+    sqlite3_stmt *stmt;
+    sqlite3_prepare_v2(db, "SELETE * FROM file_system WHERE path = ?;", -1, &stmt, 0);
+    sqlite3_bind_text(stmt, 1, ver_path.c_str(), -1, SQLITE_STATIC);
+    if (sqlite3_step(stmt) != SQLITE_ROW){
+        return -1;
     }
 
-    int file_size = ver_entry.getIntField("size");
+    int file_size = sqlite3_column_int(stmt, 6);
+
+    //int file_size = ver_entry.getIntField("size");
     if (file_size <= (size_t)offset || file_size == 0) {
 	return 0;
     }
@@ -87,7 +94,7 @@ int read_version(const string& ver_path, ScopedDbConnection *c, char *output, si
     int seg_off = seek_segment(offset);
 
     // Read first segment starting from some offset
-    int total_read = read_segment(ver_path, c, seg_off, output, size, (offset - segment_to_size(seg_off)));
+    int total_read = read_segment(ver_path, seg_off, output, size, (offset - segment_to_size(seg_off)));
     if (total_read == -1) {
 	return 0;
     }
@@ -97,7 +104,7 @@ int read_version(const string& ver_path, ScopedDbConnection *c, char *output, si
     int seg_read = 0;
     while (size > 0) {
 	// Read the rest of the segments starting at zero offset
-	seg_read = read_segment(ver_path, c, seg_off++, output + total_read, size, 0);
+	seg_read = read_segment(ver_path, seg_off++, output + total_read, size, 0);
 	if (seg_read == -1) {
 	    // If anything is wrong when reading segments, just return what we have got already
 	    break;
@@ -105,297 +112,288 @@ int read_version(const string& ver_path, ScopedDbConnection *c, char *output, si
 	total_read += seg_read;
 	size -= seg_read;
     }
+    
+    sqlite3_finalize(stmt);
 
     return total_read;
 }
 
 
-int write_temp_version(const string& path, ScopedDbConnection *c, BSONObj& file_entry, const char *buf, size_t size, off_t offset)
+int write_temp_version(const string& path, uint64_t current_ver, uint64_t temp_ver, const char *buf, size_t size, off_t offset)
 {
     int seg_off = seek_segment(offset);
 
-    long long tmp_ver_num = get_temp_version(file_entry);
-    string tmp_ver = lexical_cast<string> (tmp_ver_num);
+    //long long tmp_ver_num = get_temp_version(file_entry);
+    string tmp_ver = lexical_cast<string> (temp_ver);
     string tmp_ver_path = path + "/" + tmp_ver;
 
-    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << tmp_ver_path));
-    if (!cursor->more()) {
+    sqlite3_stmt *stmt;
+    sqlite3_prepare_v2(db, "SELECT * FROM file_system WHERE path = ? and tempVersion = ?;", -1, &stmt, 0);
+    sqlite3_bind_text(stmt, 1, tmp_ver_path.c_str(), -1, SQLITE_STATIC);
+	sqlite3_bind_int64(stmt, 2, temp_ver);
+    
+    //auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << tmp_ver_path));
+    //if (!cursor->more()) {
+    if(sqlite3_step(stmt) != SQLITE_ROW){
 	// *copy-on-write* strategy:
 	// If temp version is not inserted, create a new entry for the temp version.
 	// This only happens on the first write() after open()
-	BSONArrayBuilder bab;
 
-	if (offset > 0) {
+        int total_segment = 0;
+		if (offset > 0) {
 	    // Copy data from current version
-	    string curr_ver_path = path + "/" + lexical_cast<string> (get_current_version(file_entry));
-	    cursor = c->conn().query(db_name, QUERY("_id" << curr_ver_path));
-	    if (!cursor->more()) {
-		return -1;
-	    }
+			string curr_ver_path = path + "/" + lexical_cast<string>(current_ver);
+			sqlite3_finalize(stmt);
+			sqlite3_prepare_v2(db, "SELECT * FROM file_system WHERE path = ?;", -1, &stmt, 0);
+			sqlite3_bind_text(stmt, 1, curr_ver_path.c_str(), -1, SQLITE_STATIC);
+			if (sqlite3_step(stmt) != SQLITE_ROW){
+				return -1;
+			}
 	
-	    BSONObj curr_ver_entry = cursor->next();
-	    if (curr_ver_entry.getIntField("type") != ndnfs::version_type) {
-		return -1;
-	    }
-
-	    if (curr_ver_entry.getIntField("size") < (size_t)offset) {
+	    //BSONObj curr_ver_entry = cursor->next();
+			if(sqlite3_column_int(stmt,6) < (size_t)offset) {
 		// Trying to read after file end
-		return -1;
-	    }
+				return -1;
+			}
 	
 	    // Copy old data before the offset
-	    int seg_len;
-	    const char *seg_raw;
-	    int data_len;
-	    const char *data;
-	    int i = 0;
-	    int tail = offset;
-	    while (tail > 0) {
-		string seg_path = curr_ver_path + "/" + lexical_cast<string> (i);
-
-		cursor = c->conn().query(db_name, QUERY("_id" << seg_path));
-		if (!cursor->more()) {
-		    return -1;
-		}
-
-		BSONObj seg_entry = cursor->next();
-		if (seg_entry.getIntField("type") != ndnfs::segment_type) {
-		    return -1;
-		}
-
-		seg_raw = get_segment_data_raw(seg_entry, seg_len);
-        
-        Ptr<Blob> seg_Blob = Create<Blob>(seg_raw, seg_len);////
-        Ptr<const Blob> seg_blob = seg_Blob;////
-        Ptr<Data> seg = Data::decodeFromWire(seg_blob);////
-        Blob & seg_content = seg->content();////
-        data_len = (seg_content.size() > tail) ? tail : seg_content.size();////
-        data = (const char*)seg_content.buf();////
-        
-		////ndn::ParsedContentObject pco((const unsigned char *)seg_raw, seg_len);
-		////ndn::BytesPtr seg_content = pco.contentPtr();
-		////data_len = (seg_content->size() > tail) ? tail : seg_content->size();
-		////data = (const char *)ndn::head(*seg_content);
+			int seg_len;
+			const char *seg_raw;
+			int data_len;
+			const char *data;
+			int i = 0;
+			int tail = offset;
+			while (tail > 0) {
+				string seg_path = curr_ver_path + "/" + lexical_cast<string> (i);
+				sqlite3_finalize(stmt);
+				sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ?;", -1, &stmt, 0);
+				sqlite3_bind_blob(stmt, 1, seg_path.c_str(), -1, SQLITE_STATIC);
+				if(sqlite3_step(stmt) != SQLITE_ROW){
+					return -1;
+				}
 		
-		make_segment(path, c, tmp_ver_num, i, false, data, data_len);
+				seg_raw = sqlite3_column_blob(stmt, 1);
+				seg_len = sqlite3_column_bytes(stmt,1);
+		
+				Ptr<Blob> seg_Blob = Create<Blob>(seg_raw, seg_len);////
+				Ptr<const Blob> seg_blob = seg_Blob;////
+				Ptr<Data> seg = Data::decodeFromWire(seg_blob);////
+				Blob & seg_content = seg->content();////
+				data_len = (seg_content.size() > tail) ? tail : seg_content.size();////
+				data = (const char*)seg_content.buf();////
+        
+		
+				make_segment(path, tmp_ver_num, i, false, data, data_len);
 		    
-		bab.append(i);
 		
-		tail -= data_len;
-		i++;
-	    }
-	    assert(i <= seg_off);
-	}
+				tail -= data_len;
+				i++;
+			}
+			total_segment = i;
+			assert(i <= seg_off);
+		}
 
         // Insert temp version entry
-	BSONObj ver_entry = BSONObjBuilder().append("_id", tmp_ver_path).append("type", ndnfs::version_type)
-	    .append("data", bab.arr()).append("size", offset).obj();
-
+		sqlite3_finalize(stmt);
+		sqlite3_prepare_v2(db, "INSERT INTO file_segments (path, version, size, totalSegments) VALUES (?,?,?,?);");
+		sqlite3_bind_blob(stmt,1,path.c_str(),-1,SQLITE_STATIC);
+		sqlite3_bind_int64(stmt,2,temp_ver);
+		sqlite3_bind_int(stmt,3,offset);
+		sqlite3_bind_int(stmt,4,total_segment);
+		if(sqlite3_step(stmt) != SQLITE_OK){
+		  //if (!cursor->more()) {
+			return -1;
+		}
         // Add verion entry to database
-	c->conn().insert(db_name, ver_entry);
     
 	// Update cursor
-	cursor = c->conn().query(db_name, QUERY("_id" << tmp_ver_path));
-	if (!cursor->more()) {
-	    // If this fails, then we have something really bad
-	    return -1;
-	}
-    }
 
     // From now on, we only work on the temp version
-    BSONObj tmp_ver_entry = cursor->next();
-    if (tmp_ver_entry.getIntField("type") != ndnfs::version_type) {
-	// This should never happen
-	return -1;
-    }
 
-    const char *buf_pos = buf;
-    size_t size_left = size;
-    bool final = false;
-    int tail = offset - segment_to_size(seg_off);
+		const char *buf_pos = buf;
+		size_t size_left = size;
+		bool final = false;
+		int tail = offset - segment_to_size(seg_off);
 
-    if (tail > 0) {	
-	// Special handling for the 'seg_off' segment
-	string seg_path = tmp_ver_path + "/" + lexical_cast<string> (seg_off);
-
-	cursor = c->conn().query(db_name, QUERY("_id" << seg_path));
-	if (!cursor->more()) {
-	    return -1;
-	}
-
-	BSONObj seg_entry = cursor->next();
-	if (seg_entry.getIntField("type") != ndnfs::segment_type) {
-	    return -1;
-	}
+		if (tail > 0) {	
+	  // Special handling for the 'seg_off' segment
+			string seg_path = tmp_ver_path + "/" + lexical_cast<string> (seg_off);
+			sqlite3_finalize(stmt);
+			sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ?;", -1, &stmt, 0);
+			sqlite3_bind_blob(stmt, 1, seg_path.c_str(), -1, SQLITE_STATIC);
+			if (sqlite3_step(stmt) != SQLITE_ROW){
+				return -1;
+			}
     	
-	int seg_len;
-	const char *seg_raw = get_segment_data_raw(seg_entry, seg_len);
+			int seg_len = sqlite3_column_bytes(stmt,1);
+			const char *seg_raw = sqlite3_column_blob(stmt,1);//get_segment_data_raw(seg_entry, seg_len);
 
-	if (seg_len > 0) {
-	    Ptr<Blob> seg_Blob = Create<Blob>(seg_raw, seg_len);////
-        Ptr<const Blob> seg_blob = seg_Blob;////
-        Ptr<Data> seg = Data::decodeFromWire(seg_blob);////
-        Blob & seg_content = seg->content();////
+			if (seg_len > 0) {
+				Ptr<Blob> seg_Blob = Create<Blob>(seg_raw, seg_len);////
+				Ptr<const Blob> seg_blob = seg_Blob;////
+				Ptr<Data> seg = Data::decodeFromWire(seg_blob);////
+				Blob & seg_content = seg->content();////
         
-        assert(tail < seg_content.size());
-        const char *old_data = (const char*)seg_content.buf();
+				assert(tail < seg_content.size());
+				const char *old_data = (const char*)seg_content.buf();
         
-	    //ndn::ParsedContentObject pco((const unsigned char *)seg_raw, seg_len);
-	    //ndn::BytesPtr seg_content = pco.contentPtr();
 
-	    //assert(tail < seg_content->size());
-	    //const char *old_data = (const char *)ndn::head(*seg_content);
+				int copy_len = ndnfs::seg_size - tail;
+				if (copy_len > size) {
+		  // The data we want to write may not fill out the rest of the segment
+					copy_len = size;
+					final = true;
+				}
 
-	    int copy_len = ndnfs::seg_size - tail;
-	    if (copy_len > size) {
-		// The data we want to write may not fill out the rest of the segment
-		copy_len = size;
-		final = true;
-	    }
-
-	    char *data = new char[tail + copy_len];
-	    if (data == NULL) {
-		return -1;
-	    }
+				char *data = new char[tail + copy_len];
+				if (data == NULL) {
+					return -1;
+				}
 	    
-	    memcpy(data, old_data, tail);
-	    memcpy(data + tail, buf, copy_len);
+				memcpy(data, old_data, tail);
+				memcpy(data + tail, buf, copy_len);
 	    
-	    make_segment(path, c, tmp_ver_num, seg_off++, final, data, tail + copy_len);
-	    delete data;
+				make_segment(path, tmp_ver_num, seg_off++, final, data, tail + copy_len);
+				delete data;
 	    
-	    if (final) {
-		// Then we are done
-		goto out;
-	    }
-	    // Else, move pointer forward
-	    buf_pos += copy_len;
-	    size_left -= copy_len;
-	}
-    }
+				if (final) {
+		  // Then we are done
+					goto out;
+				}	
+		// Else, move pointer forward
+				buf_pos += copy_len;
+				size_left -= copy_len;
+			}
+		}
     
-    while (size_left > 0) {
-	int copy_len = ndnfs::seg_size;
-	if (copy_len > size_left) {
-	    copy_len = size_left;
-	    final = true;
-	}
+		while (size_left > 0) {
+			int copy_len = ndnfs::seg_size;
+			if (copy_len > size_left) {
+				copy_len = size_left;
+				final = true;
+			}
 
-	make_segment(path, c, tmp_ver_num, seg_off++, final, buf_pos, copy_len);
-	buf_pos += copy_len;
-	size_left -= copy_len;
+			make_segment(path tmp_ver_num, seg_off++, final, buf_pos, copy_len);
+			buf_pos += copy_len;
+			size_left -= copy_len;
+		}
     }
 
 out:
     // Remove old segments after seg_off
-    remove_segments(tmp_ver_path, c, seg_off);
+    remove_segments(tmp_ver_path, seg_off);
 
     // Update temp version entry
-    BSONArrayBuilder bab;
+    
+    /*BSONArrayBuilder bab;
     for (int i = 0; i < seg_off; i++) {
 	bab.append(i);
+	}*/
+    sqlite3_finalize(stmt);
+    sqlite3_prepare_v2(db, "UPDATE file_versions SET size = ? WHERE path = ? and version = ?;", -1, &stmt, 0);
+    sqlite3_bind_int(stmt,1,(int)(offset+size));
+    sqlite3_bind_text(stmt, 2, tmp_ver_path.c_str(), -1, SQLITE_STATIC);
+	sqlite3_bind_int64(stmt, 3, temp_ver);
+    if (sqlite3_step(stmt) != SQLITE_ROW){
+        return -1;
     }
-    c->conn().update(db_name, BSON("_id" << tmp_ver_path), BSON( "$set" << BSON( "data" << bab.arr() << "size" << (int)(offset + size) ) ));
+    sqlite3_finalize(stmt);
+    //c->conn().update(db_name, BSON("_id" << tmp_ver_path), BSON( "$set" << BSON( "data" << bab.arr() << "size" << (int)(offset + size) ) ));
 
     return size;
 }
 
 
-int truncate_temp_version(const string& path, ScopedDbConnection *c, BSONObj& file_entry, off_t length)
+int truncate_temp_version(const string& path, uint64_t current_ver, uint64_t temp_ver, off_t length)
 {
-    int seg_off = seek_segment(length);
+    int seg_off = seek_segment(offset);
 
-    long long tmp_ver_num = get_temp_version(file_entry);
-    string tmp_ver = lexical_cast<string> (tmp_ver_num);
+    //long long tmp_ver_num = get_temp_version(file_entry);
+    string tmp_ver = lexical_cast<string> (temp_ver);
     string tmp_ver_path = path + "/" + tmp_ver;
 
-    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << tmp_ver_path));
-    if (!cursor->more()) {
+	sqlite3_stmt *stmt;
+    sqlite3_prepare_v2(db, "SELECT * FROM file_system WHERE path = ? and tempVersion = ?;", -1, &stmt, 0);
+    sqlite3_bind_text(stmt, 1, tmp_ver_path.c_str(), -1, SQLITE_STATIC);
+	sqlite3_bind_int64(stmt, 2, temp_ver);
+
+    
+    if (sqlite3_step(stmt) != SQLITE_ROW) {
         // *copy-on-write* strategy:
 	// If temp version is not inserted, create a new entry for the temp version.
 	// This only happens on the first truncate() after open()
-	BSONArrayBuilder bab;
+		int total_segment = 0;
+		if (length > 0) {
+			// Copy data from current version
+			string curr_ver_path = path + "/" + lexical_cast<string>(current_ver);
+			sqlite3_finalize(stmt);
+			sqlite3_prepare_v2(db, "SELECT * FROM file_system WHERE path = ?;", -1, &stmt, 0);
+			sqlite3_bind_text(stmt, 1, curr_ver_path.c_str(), -1, SQLITE_STATIC);
+			if (sqlite3_step(stmt) != SQLITE_ROW){
+				return -1;
+			}
 
-	if (length > 0) {
-	    // Copy data from current version
-	    string curr_ver_path = path + "/" + lexical_cast<string> (get_current_version(file_entry));
-	    cursor = c->conn().query(db_name, QUERY("_id" << curr_ver_path));
-	    if (!cursor->more()) {
-		return -1;
-	    }
+			if (sqlite3_column_int(stmt,6)  < (size_t)length) {
+			// TODO: pad zeros
+			return -1;
+			}
 	
-	    BSONObj curr_ver_entry = cursor->next();
-	    if (curr_ver_entry.getIntField("type") != ndnfs::version_type) {
-		return -1;
-	    }
+			// Copy old data before the offset
+			int seg_len;
+			const char *seg_raw;
+			int data_len;
+			const char *data;
+			int i = 0;
+			int tail = length;
+			while (tail > 0) {
+				string seg_path = curr_ver_path + "/" + lexical_cast<string> (i);
 
-	    if (curr_ver_entry.getIntField("size") < (size_t)length) {
-		// TODO: pad zeros
-		return -1;
-	    }
-	
-	    // Copy old data before the offset
-	    int seg_len;
-	    const char *seg_raw;
-	    int data_len;
-	    const char *data;
-	    int i = 0;
-	    int tail = length;
-	    while (tail > 0) {
-		string seg_path = curr_ver_path + "/" + lexical_cast<string> (i);
+				sqlite3_finalize(stmt);
+				sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ?;", -1, &stmt, 0);
+				sqlite3_bind_blob(stmt, 1, seg_path.c_str(), -1, SQLITE_STATIC);
+				if(sqlite3_step(stmt) != SQLITE_ROW){
+					return -1;
+				}
 
-		cursor = c->conn().query(db_name, QUERY("_id" << seg_path));
-		if (!cursor->more()) {
-		    return -1;
-		}
-
-		BSONObj seg_entry = cursor->next();
-		if (seg_entry.getIntField("type") != ndnfs::segment_type) {
-		    return -1;
-		}
-
-		seg_raw = get_segment_data_raw(seg_entry, seg_len);
+				seg_raw = sqlite3_column_blob(stmt, 1);
+				seg_len = sqlite3_column_bytes(stmt,1);
 		
-        Ptr<Blob> seg_Blob = Create<Blob>(seg_raw, seg_len);////
-        Ptr<const Blob> seg_blob = seg_Blob;////
-        Ptr<Data> seg = Data::decodeFromWire(seg_blob);////
-        Blob & seg_content = seg->content();////
+				Ptr<Blob> seg_Blob = Create<Blob>(seg_raw, seg_len);////
+				Ptr<const Blob> seg_blob = seg_Blob;////
+				Ptr<Data> seg = Data::decodeFromWire(seg_blob);////
+				Blob & seg_content = seg->content();////
         
-        data_len = (seg_content.size() > tail) ? tail : seg_content.size();////
-        data = (const char*)seg_content.buf();////
+				data_len = (seg_content.size() > tail) ? tail : seg_content.size();////
+				data = (const char*)seg_content.buf();////
         
-		////ndn::ParsedContentObject pco((const unsigned char *)seg_raw, seg_len);
-		////ndn::BytesPtr seg_content = pco.contentPtr();
+				////ndn::ParsedContentObject pco((const unsigned char *)seg_raw, seg_len);
+				////ndn::BytesPtr seg_content = pco.contentPtr();
     
-		////data_len = (seg_content->size() > tail) ? tail : seg_content->size();
-		////data = (const char *)ndn::head(*seg_content);
+				////data_len = (seg_content->size() > tail) ? tail : seg_content->size();
+				////data = (const char *)ndn::head(*seg_content);
 		
-		make_segment(path, c, tmp_ver_num, i, false, data, data_len);
-		    
-		bab.append(i);
+				make_segment(path, tmp_ver_num, i, false, data, data_len);
 		
-		tail -= data_len;
-		i++;
-	    }
-	    assert(i <= seg_off);
-	}
-
-        // Insert temp version entry
-	BSONObj ver_entry = BSONObjBuilder().append("_id", tmp_ver_path).append("type", ndnfs::version_type)
-	    .append("data", bab.arr()).append("size", length).obj();
-
-        // Add verion entry to database
-	c->conn().insert(db_name, ver_entry);
-    
-	return 0;
+				tail -= data_len;
+				i++;
+			}
+			total_segment = i;
+			assert(i <= seg_off);
+		}
+		sqlite3_finalize(stmt);
+		sqlite3_prepare_v2(db, "INSERT INTO file_segments (path, version, size, totalSegments) VALUES (?,?,?,?);");
+		sqlite3_bind_blob(stmt,1,path.c_str(),-1,SQLITE_STATIC);
+		sqlite3_bind_int64(stmt,2,temp_ver);
+		sqlite3_bind_int(stmt,3,length);
+		sqlite3_bind_int(stmt,4,total_segment);
+		if(sqlite3_step(stmt) != SQLITE_OK){
+		  //if (!cursor->more()) {
+			return -1;
+		}
+		return 0;
     }
     
-    BSONObj tmp_ver_entry = cursor->next();
-    if (tmp_ver_entry.getIntField("type") != ndnfs::version_type) {
-        return -EINVAL;
-    }
-
-    int size = tmp_ver_entry.getIntField("size");
+    int size = sqlite3_column_int(stmt,6);
 
     if ((size_t)length == size) {
 	return 0;
@@ -403,16 +401,20 @@ int truncate_temp_version(const string& path, ScopedDbConnection *c, BSONObj& fi
 	// Truncate to length
 	int seg_end = seek_segment(length);
 
+	sqlite3_finalize(stmt);
+	sqlite3_prepare_v2(db, "UPDATE file_versions SET size = ?, totalSegments = ? WHERE path = ? and version = ?;", -1, &stmt, 0);
+    sqlite3_bind_int(stmt,1,(int)(length));
+	sqlite3_bind_int(stmt, 2, seg_end);
+    sqlite3_bind_text(stmt, 3, tmp_ver_path.c_str(), -1, SQLITE_STATIC);
+	sqlite3_bind_int64(stmt, 4, temp_ver);
+    if (sqlite3_step(stmt) != SQLITE_ROW){
+        return -1;
+    }
+    sqlite3_finalize(stmt);
 	// Update version size and segment list
-	BSONArrayBuilder bab;
-	for (int i = 0; i <= seg_end; i++) {
-	    bab.append(i);
-	}
-	c->conn().update(db_name, BSON("_id" << tmp_ver_path), BSON( "$set" << BSON( "data" << bab.arr() << "size" << (int)length ) ));
-
 	int tail = length - segment_to_size(seg_end);
-	truncate_segment(tmp_ver_path, c, seg_end, tail);
-	remove_segments(tmp_ver_path, c, seg_end + 1);
+	truncate_segment(tmp_ver_path, seg_end, tail);
+	remove_segments(tmp_ver_path, seg_end + 1);
 	
 	return 0;
     } else {
@@ -422,30 +424,44 @@ int truncate_temp_version(const string& path, ScopedDbConnection *c, BSONObj& fi
 }
 
 
-void remove_version(const string& ver_path, ScopedDbConnection *c)
+void remove_version(const string& ver_path, uint64_t version)
 {
-    remove_segments(ver_path, c);
-    c->conn().remove(db_name, QUERY("_id" << ver_path));
+    remove_segments(ver_path);
+    sqlite3_stmt *stmt;
+    sqlite3_prepare_v2(db, "DELETE FROM file_versions WHERE path = ? and version = ?;", -1, &stmt, 0);
+    sqlite3_bind_text(stmt, 1, ver_path.c_str(), -1, SQLITE_STATIC);
+	sqlite3_bind_int64(stmt, 2, version);
+    if(sqlite3_step(stmt) == SQLITE_OK){
+    }
+    sqlite3_finalize(stmt);
+    //    c->conn().remove(db_name, QUERY("_id" << ver_path));
 }
 
 
-void remove_versions(const string& file_path, ScopedDbConnection *c)
+void remove_versions(const string& file_path)
 {
-    auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << file_path));
+  /*auto_ptr<DBClientCursor> cursor = c->conn().query(db_name, QUERY("_id" << file_path));
     if (!cursor->more()) {
         return;
-    }
+	}*/
+    sqlite3_stmt *stmt;
+    sqlite3_prepare_v2(db, "SELECT * FROM file_versions WHERE path = ?;", -1, &stmt, 0);
+    sqlite3_bind_text(stmt, 1, file_path.c_str(), -1, SQLITE_STATIC);
+    if(sqlite3_step(stmt) == SQLITE_ROW){
+      //BSONObj file_entry = cursor->next();
+      //long long curr_ver = get_current_version(file_entry);
+        uint64_t curr_ver = sqlite3_column_int64(stmt, 1);
+	if (curr_ver != -1) {
+	    string curr_ver_path = file_path + "/" + lexical_cast<string> (curr_ver);
+	    remove_version(curr_ver_path);
+	}
 
-    BSONObj file_entry = cursor->next();
-    long long curr_ver = get_current_version(file_entry);
-    if (curr_ver != -1) {
-	string curr_ver_path = file_path + "/" + lexical_cast<string> (curr_ver);
-	remove_version(curr_ver_path, c);
+	uint64_t tmp_ver = sqlite3_column_int64(stmt, 2);
+	//long long tmp_ver = get_temp_version(file_entry);
+	if (tmp_ver != -1) {
+	    string tmp_ver_path = file_path + "/" + lexical_cast<string> (tmp_ver);
+	    remove_version(tmp_ver_path);
+	}
     }
-
-    long long tmp_ver = get_temp_version(file_entry);
-    if (tmp_ver != -1) {
-	string tmp_ver_path = file_path + "/" + lexical_cast<string> (tmp_ver);
-	remove_version(tmp_ver_path, c);
-    }
+    sqlite3_finalize(stmt);
 }

@@ -31,44 +31,52 @@ inline long long generate_version() {
 }
 
 
-inline long long get_temp_version(mongo::BSONObj& file_entry)
-{
-    return  file_entry.getField("temp").Long();
-}
+//inline long long get_temp_version(mongo::BSONObj& file_entry)
+//{
+//    return  file_entry.getField("temp").Long();
+//}
 
 
-inline long long get_current_version(mongo::BSONObj& file_entry)
-{
-    return  file_entry.getField("data").Long();
-}
+//inline long long get_current_version(mongo::BSONObj& file_entry)
+//{
+//    return  file_entry.getField("data").Long();
+//}
 
 
-inline int get_version_size(mongo::BSONObj& ver_entry)
-{
-    return  ver_entry.getIntField("size");
-}
+//inline int get_version_size(mongo::BSONObj& ver_entry)
+//{
+//    return  ver_entry.getIntField("size");
+//}
 
-int get_version_size(const std::string& path, mongo::ScopedDbConnection *c, const long long ver);
+//int get_version_size(const std::string& path, mongo::ScopedDbConnection *c, const long long ver);
 
 long long create_temp_version(const std::string& path, mongo::ScopedDbConnection *c);
 
-int get_current_version_size(const std::string& path, mongo::ScopedDbConnection *c, mongo::BSONObj& file_entry);
+//int get_current_version_size(const std::string& path, mongo::ScopedDbConnection *c, mongo::BSONObj& file_entry);
 
-int read_version(const std::string& ver_path, mongo::ScopedDbConnection *c, char *output, size_t size, off_t offset);
+int read_version(const std::string& ver_path, char *output, size_t size, off_t offset);
 
-inline int read_current_version(const std::string& path, mongo::ScopedDbConnection *c, mongo::BSONObj& file_entry, char *output, size_t size, off_t offset)
+inline int read_current_version(const std::string& path, char *output, size_t size, off_t offset)
 {
-    long long curr_ver = get_current_version(file_entry);
+    sqlite3_stmt *stmt;
+    sqlite3_prepare_v2(db, "SELECT * FROM file_versions WHERE path = ?;", -1, &stmt, 0);
+    sqlite3_bind_text(db, 1, path.c_str(), -1, SQLITE_STATIC);
+    if (sqlite3_step(stmt) != ROW){
+        return -1;
+    }
+    uint64_t curr_ver = sqlite3_column_int64(stmt, 1);
+    //long long curr_ver = get_current_version(file_entry);
     if (curr_ver == -1)
 	return -1;
     
     std::string version = boost::lexical_cast<std::string> (curr_ver);
     std::string ver_path = path + "/" + version;
-    return read_version(ver_path, c, output, size, offset);
+    return read_version(ver_path, output, size, offset);
+    sqlite3_finalize(stmt);
 }
 
 
-int write_temp_version(const std::string& path, mongo::ScopedDbConnection *c, mongo::BSONObj& file_entry, const char *buf, size_t size, off_t offset);
+int write_temp_version(const std::string& path, const char *buf, size_t size, off_t offset);
 
 int truncate_temp_version(const std::string& path, mongo::ScopedDbConnection *c, mongo::BSONObj& file_entry, off_t length);
 

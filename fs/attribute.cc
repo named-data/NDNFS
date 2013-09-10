@@ -32,8 +32,8 @@ int ndnfs_getattr(const char *path, struct stat *stbuf)
     
     int ret = 0;
     sqlite3_stmt *stmt;
-    sqlite3_prepare_v2(m_db, "SELECT * FROM file_system WHERE path = ?;", -1, &stmt, 0);
-    sqlite3_bind_blob(stmt, 1, path, -1, SQLITE_STATIC);
+    sqlite3_prepare_v2(db, "SELECT * FROM file_system WHERE path = ?;", -1, &stmt, 0);
+    sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
     if (sqlite3_step(stmt) == SQLITE_ROW) {
 	int type = sqlite3_column_int(stmt, 2);
 	
@@ -74,7 +74,7 @@ int ndnfs_chmod(const char *path, mode_t mode)
     sqlite3_stmt *stmt;
     sqlite3_prepare_v2(db, "UPDATE file_system SET mode = ? WHERE path = ?;", -1, &stmt, 0);
     sqlite3_bind_int(stmt, 1, mode);
-    sqlite3_bind_blob(stmt, 2, path, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, path, -1, SQLITE_STATIC);
     if (sqlite3_step(stmt) == SQLITE_OK) {
 	if (sqlite3_changes(db) == 0)
 	    ret = -ENOENT;
