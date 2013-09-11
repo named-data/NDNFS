@@ -33,6 +33,7 @@
 #include <time.h>
 #include <sys/time.h>
 
+#define FUSE_USE_VERSION 26
 #include <fuse.h>
 #include <sqlite3.h>
 

@@ -130,11 +130,7 @@ CREATE TABLE IF NOT EXISTS                        \n\
 CREATE INDEX id_fs ON file_system (path);         \n\
 ";
 
-    if (sqlite3_exec(db, INIT_FS_TABLE, NULL, NULL, NULL) != SQLITE_OK) {
-	cout << "Cannot create file_system table in sqlite db" << endl;
-	sqlite3_close(db);
-        return -1;
-    }
+    sqlite3_exec(db, INIT_FS_TABLE, NULL, NULL, NULL);
 
     const char* INIT_VER_TABLE = "\
 CREATE TABLE IF NOT EXISTS                                   \n\
@@ -143,35 +139,50 @@ CREATE TABLE IF NOT EXISTS                                   \n\
     version       INTEGER,                                   \n\
     size          INTEGER,                                   \n\
     totalSegments INTEGER,                                   \n\
-    PRIMARY KEY (path)                                       \n\
+    PRIMARY KEY (path, version)                              \n\
   );                                                         \n\
 CREATE INDEX id_ver ON file_versions (path, version);        \n\
 ";
 
-    if (sqlite3_exec(db, INIT_VER_TABLE, NULL, NULL, NULL) != SQLITE_OK) {
-	cout << "Cannot create file_versions table in sqlite db" << endl;
-	sqlite3_close(db);
-        return -1;
-    }
+    sqlite3_exec(db, INIT_VER_TABLE, NULL, NULL, NULL);
 
     const char* INIT_SEG_TABLE = "\
 CREATE TABLE IF NOT EXISTS                        \n\
   file_segments(                                  \n\
-    name        TEXT NOT NULL,                    \n\
+    path        TEXT NOT NULL,                    \n\
     data        BLOB NOT NULL,                    \n\
     offset      INTEGER,                          \n\
-    PRIMARY KEY (name)                            \n\
+    PRIMARY KEY (path)                            \n\
   );                                              \n\
-CREATE INDEX id_seg ON file_segments (name);      \n\
+CREATE INDEX id_seg ON file_segments (path);      \n\
 ";
 
-    if (sqlite3_exec(db, INIT_SEG_TABLE, NULL, NULL, NULL) != SQLITE_OK) {
-	cout << "Cannot create file_segments table in sqlite db" << endl;
-	sqlite3_close(db);
-        return -1;
-    }
+    sqlite3_exec(db, INIT_SEG_TABLE, NULL, NULL, NULL);
 
     cout << "main: ok" << endl;
+
+    cout << "main: mount root folder..." << endl;
+
+    int now = time(0);
+    sqlite3_stmt *stmt;
+    sqlite3_prepare_v2(db, 
+		       "INSERT INTO file_system (path, parent, type, mode, atime, mtime, size, current_version, temp_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);", 
+		       -1, &stmt, 0);
+    sqlite3_bind_text(stmt, 1, "/", -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, "", -1, SQLITE_STATIC);
+    sqlite3_bind_int(stmt, 3, ndnfs::dir_type);
+    sqlite3_bind_int(stmt, 4, 0777);
+    sqlite3_bind_int(stmt, 5, now);
+    sqlite3_bind_int(stmt, 6, now);
+    sqlite3_bind_int(stmt, 7, -1);  // size
+    sqlite3_bind_int64(stmt, 8, -1);  // current version
+    sqlite3_bind_int64(stmt, 9, -1);  // temp version
+ 
+    if (sqlite3_step(stmt) == SQLITE_OK) {
+      cout << "main: OK" << endl;
+    }
+
+   sqlite3_finalize(stmt);
 
     create_fuse_operations(&ndnfs_fs_ops);
     

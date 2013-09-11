@@ -54,18 +54,18 @@ inline uint64_t generate_version() {
 
 //int get_current_version_size(const std::string& path, mongo::ScopedDbConnection *c, mongo::BSONObj& file_entry);
 
-int read_version(const std::string& ver_path, char *output, size_t size, off_t offset);
+int read_version(const char* path, uint64_t version, char *output, size_t size, off_t offset);
 
-inline int read_current_version(const std::string& path, char *output, size_t size, off_t offset)
+/*
+inline int read_current_version(const char* path, uint64_t version, char *output, size_t size, off_t offset)
 {
     sqlite3_stmt *stmt;
     sqlite3_prepare_v2(db, "SELECT * FROM file_versions WHERE path = ?;", -1, &stmt, 0);
-    sqlite3_bind_text(db, 1, path.c_str(), -1, SQLITE_STATIC);
-    if (sqlite3_step(stmt) != ROW){
+    sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_STATIC);
+    if (sqlite3_step(stmt) != SQLITE_ROW){
         return -1;
     }
     uint64_t curr_ver = sqlite3_column_int64(stmt, 1);
-    //long long curr_ver = get_current_version(file_entry);
     if (curr_ver == -1)
 	return -1;
     
@@ -74,14 +74,14 @@ inline int read_current_version(const std::string& path, char *output, size_t si
     return read_version(ver_path, output, size, offset);
     sqlite3_finalize(stmt);
 }
+*/
 
+int write_temp_version(const std::string& path, uint64_t current_ver, uint64_t temp_ver, const char *buf, size_t size, off_t offset);
 
-int write_temp_version(const std::string& path, const char *buf, size_t size, off_t offset);
+int truncate_temp_version(const std::string& path, uint64_t current_ver, uint64_t temp_ver, off_t length);
 
-int truncate_temp_version(const std::string& path, mongo::ScopedDbConnection *c, mongo::BSONObj& file_entry, off_t length);
+void remove_version(const char* path, uint64_t version);
 
-void remove_version(const std::string& ver_path, mongo::ScopedDbConnection *c);
-
-void remove_versions(const std::string& file_path, mongo::ScopedDbConnection *c);
+void remove_versions(const char* path);
 
 #endif

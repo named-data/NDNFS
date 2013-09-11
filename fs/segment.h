@@ -42,7 +42,7 @@ int read_segment(const std::string& ver_path, const int seg, char *output, const
 
 int make_segment(const std::string& file_path, const uint64_t ver, const int seg, const bool final, const char *data, const int len);
 
-void remove_segments(const std::string& ver_path, const int start = 0);
+void remove_segments(const std::string& ver_path, uint64_t version, const int start = 0);
 
 void truncate_segment(const std::string& ver_path, const int seg, const off_t length);
 

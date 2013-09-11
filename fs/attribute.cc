@@ -55,6 +55,8 @@ int ndnfs_getattr(const char *path, struct stat *stbuf)
 	// Use the same id for all files and dirs
 	stbuf->st_uid = ndnfs::user_id;
 	stbuf->st_gid = ndnfs::group_id;
+    } else {
+        ret = -ENOENT;
     }
     
     sqlite3_finalize(stmt);
