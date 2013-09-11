@@ -25,8 +25,7 @@ using namespace boost;
 int ndnfs_open(const char *path, struct fuse_file_info *fi)
 {
 #ifdef NDNFS_DEBUG
-    cout << "ndnfs_open: called with path " << path << endl;
-    cout << "ndnfs_open: flag is 0x" << std::hex << fi->flags << endl;
+    cout << "ndnfs_open: path=" << path << ", flag=0x" << std::hex << fi->flags << endl;
 #endif
 
     sqlite3_stmt *stmt;
@@ -87,8 +86,7 @@ int ndnfs_open(const char *path, struct fuse_file_info *fi)
 int ndnfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 {
 #ifdef NDNFS_DEBUG
-    cout << "ndnfs_create: called with path " << path << endl;
-    cout << "ndnfs_create: create file with flag 0x" << std::hex << fi->flags << " and mode 0" << std::oct << mode << endl;
+    cout << "ndnfs_create: path=" << path << ", flag=0x" << std::hex << fi->flags << ", mode=0" << std::oct << mode << endl;
 #endif
 
     string dir_path, file_name;
@@ -158,8 +156,7 @@ int ndnfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 int ndnfs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
 {
 #ifdef NDNFS_DEBUG
-    cout << "ndnfs_read: called with path " << path << endl;
-    cout << "ndnfs_read: start read at offset " << std::dec << offset << " with size " << size << endl;
+    cout << "ndnfs_read: path=" << path << ", offset=" << std::dec << offset << ", size=" << size << endl;
 #endif
 
     sqlite3_stmt *stmt;
@@ -195,8 +192,7 @@ int ndnfs_read(const char *path, char *buf, size_t size, off_t offset, struct fu
 int ndnfs_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
 {
 #ifdef NDNFS_DEBUG
-    cout << "ndnfs_write: called with path " << path << endl;
-    cout << "ndnfs_write: start write at offset " << std::dec << offset << " with size " << size << endl;
+  cout << "ndnfs_write: path=" << path << std::dec << ", size=" << size << ", offset=" << offset << endl;
 #endif
 
     sqlite3_stmt *stmt;
@@ -224,7 +220,8 @@ int ndnfs_write(const char *path, const char *buf, size_t size, off_t offset, st
 	return -EINVAL;
     }
 
-    sqlite3_prepare_v2(db, "UPDATE file_system SET mtime = ? WHERE path = ?;", -1, &stmt, 0);
+    sqlite3_prepare_v2(db, "UPDATE file_system SET size = ?, mtime = ? WHERE path = ?;", -1, &stmt, 0);
+    sqlite3_bind_int(stmt, 1, (int)(offset + size));
     sqlite3_bind_int(stmt, 1, (int)time(0));
     sqlite3_bind_text(stmt, 2, path, -1, SQLITE_STATIC);
     sqlite3_step(stmt);
@@ -237,8 +234,7 @@ int ndnfs_write(const char *path, const char *buf, size_t size, off_t offset, st
 int ndnfs_truncate(const char *path, off_t length)
 {
 #ifdef NDNFS_DEBUG
-    cout << "ndnfs_truncate: called with path " << path << endl;
-    cout << "ndnfs_truncate: truncate to length " << std::dec << length << endl;
+    cout << "ndnfs_truncate: path=" << path << ", truncate to length " << std::dec << length << endl;
 #endif
 
     sqlite3_stmt *stmt;
@@ -276,7 +272,7 @@ int ndnfs_truncate(const char *path, off_t length)
 int ndnfs_unlink(const char *path)
 {
 #ifdef NDNFS_DEBUG
-    cout << "ndnfs_unlink: called with path " << path << endl;
+    cout << "ndnfs_unlink: path=" << path << endl;
 #endif
 
     string dir_path, file_name;
@@ -305,7 +301,7 @@ int ndnfs_unlink(const char *path)
 int ndnfs_release(const char *path, struct fuse_file_info *fi)
 {
 #ifdef NDNFS_DEBUG
-    cout << "ndnfs_release: called with path " << path << " and flag " << std::hex << fi->flags << endl;
+    cout << "ndnfs_release: path=" << path << ", flag=0x" << std::hex << fi->flags << endl;
 #endif
 
     sqlite3_stmt *stmt;

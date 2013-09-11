@@ -34,7 +34,7 @@ using namespace ndn;
 int read_segment(const char* path, const uint64_t ver, const int seg, char *output, const int limit, const int offset)
 {
 #ifdef NDNFS_DEBUG
-  cout << "read_segment: " << path << ", " << ver << ", " << seg << ", " << limit << ", " << offset << endl;
+  cout << "read_segment: path=" << path << std::dec << ", ver=" << ver << ", seg=" << seg << ", limit=" << limit << ", offset=" << offset << endl;
 #endif
 
     const char*co_raw;
@@ -52,10 +52,9 @@ int read_segment(const char* path, const uint64_t ver, const int seg, char *outp
     co_raw = (const char*) sqlite3_column_blob(stmt, 3);
     co_size = sqlite3_column_bytes(stmt, 3);
 
-    Ptr<Blob> data_Blob = Create<Blob>(co_raw, co_size);
-    Ptr<const Blob> data = data_Blob;
-    const Blob& data_content = Data::decodeFromWire(data)->content();
-    const char *content = data_content.buf();
+    Ptr<Blob> data_blob = Create<Blob>(co_raw, co_size);
+    Ptr<Data> data = Data::decodeFromWire(data_blob);
+    const char *content = data->content().buf();
 
 #ifdef NDNFS_DEBUG
     cout << "read_segment: raw data is " << endl;
@@ -66,7 +65,7 @@ int read_segment(const char* path, const uint64_t ver, const int seg, char *outp
     cout << "read_segment: raw data length is " << co_size << endl;
 #endif
 
-    int copy_len = data_content.size();
+    int copy_len = data->content().size();
     if (copy_len > limit)  // Don't write across the limit
 	copy_len = limit;
 
@@ -89,7 +88,7 @@ int read_segment(const char* path, const uint64_t ver, const int seg, char *outp
 int make_segment(const char* path, const uint64_t ver, const int seg, const bool final, const char *data, const int len)
 {
 #ifdef NDNFS_DEBUG
-    cout << "make_segment: " << path << ", " << ver << ", " << seg << ", " << len << endl;
+    cout << "make_segment: path=" << path << std::dec << ", ver=" << ver << ", seg=" << seg << ", len=" << len << endl;
 #endif
 
     assert(len > 0);
@@ -145,7 +144,7 @@ int make_segment(const char* path, const uint64_t ver, const int seg, const bool
 void remove_segments(const char* path, const uint64_t ver, const int start/* = 0 */)
 {
 #ifdef NDNFS_DEBUG
-  cout << "remove_segments: " << path << ", " << ver << ", from segment #" << start << endl;
+  cout << "remove_segments: path=" << path << std::dec << ", ver=" << ver << ", from segment #" << start << endl;
 #endif
 
     sqlite3_stmt *stmt;
@@ -173,7 +172,7 @@ void remove_segments(const char* path, const uint64_t ver, const int start/* = 0
 void truncate_segment(const char* path, const uint64_t ver, const int seg, const off_t length)
 {
 #ifdef NDNFS_DEBUG
-  cout << "truncate_segment: " << path << ", " << ver << ", " << seg << ", " << length << endl;
+  cout << "truncate_segment: path=" << path << std::dec << ", ver=" << ver << ", seg=" << seg << ", length=" << length << endl;
 #endif
 
     sqlite3_stmt *stmt;
@@ -196,13 +195,12 @@ void truncate_segment(const char* path, const uint64_t ver, const int seg, const
 
 	  assert(co_size > (int)length);
 
-	  Ptr<Blob> data_Blob = Create<Blob>(co_raw,co_size);
-	  Ptr<const Blob> data_blob = data_Blob;
+	  Ptr<Blob> data_blob = Create<Blob>(co_raw, co_size);
 	  Ptr<Data> data = Data::decodeFromWire(data_blob);
 	  const Blob& data_content = data->content();
 	  const char *content = data_content.buf();
 
-	  Content co(content,length);
+	  Content co(content, length);
 	  Data trunc_data;
 	  trunc_data.setName(data->getName());
 	  trunc_data.setContent(co);

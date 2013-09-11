@@ -26,7 +26,7 @@ using namespace boost;
 int ndnfs_getattr(const char *path, struct stat *stbuf)
 {
 #ifdef NDNFS_DEBUG
-    cout << "ndnfs_getattr: called with path " << path << endl;
+    cout << "ndnfs_getattr: path=" << path << endl;
 #endif
 
     memset(stbuf, 0, sizeof(struct stat));
@@ -69,8 +69,7 @@ int ndnfs_getattr(const char *path, struct stat *stbuf)
 int ndnfs_chmod(const char *path, mode_t mode)
 {
 #ifdef NDNFS_DEBUG
-    cout << "ndnfs_chmod: called with path " << path << endl;
-    cout << "ndnfs_chmod: change mode to 0" << std::oct << mode << endl;
+    cout << "ndnfs_chmod: path=" << path << ", change mode to " << std::oct << mode << endl;
 #endif
     
     int ret = 0;

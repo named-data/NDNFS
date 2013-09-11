@@ -26,7 +26,7 @@ using namespace boost;
 int ndnfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi)
 {
 #ifdef NDNFS_DEBUG
-    cout << "ndnfs_readdir: called with path " << path << endl;
+    cout << "ndnfs_readdir: path=" << path << endl;
 #endif    
 
     sqlite3_stmt *stmt;
@@ -61,8 +61,7 @@ int ndnfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t off
 int ndnfs_mkdir(const char *path, mode_t mode)
 {
 #ifdef NDNFS_DEBUG
-    cout << "ndnfs_mkdir: called with path " << path << endl;
-    cout << "ndnfs_mkdir: make directory with mode 0" << std::oct << mode << endl;
+    cout << "ndnfs_mkdir: path=" << path << ", mode=0" << std::oct << mode << endl;
 #endif
 
     string dir_path, dir_name;
@@ -109,7 +108,7 @@ int ndnfs_mkdir(const char *path, mode_t mode)
 int ndnfs_rmdir(const char *path)
 {
 #ifdef NDNFS_DEBUG
-    cout << "ndnfs_rmdir: called with path " << path << endl;
+    cout << "ndnfs_rmdir: path=" << path << endl;
 #endif
 
     if (strcmp(path, "/") == 0) {
