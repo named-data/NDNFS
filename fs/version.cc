@@ -15,6 +15,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *
  * Author: Wentao Shang <wentao@cs.ucla.edu>
+ *         Qiuhan Ding <dingqiuhan@gmail.com>
  */
 
 #include "version.h"
@@ -26,19 +27,16 @@ using namespace std;
 using namespace boost;
 using namespace ndn;
 
-int read_version(const char *path, uint64_t version, char *output, size_t size, off_t offset)
+int read_version(const char *path, const uint64_t ver, char *output, size_t size, off_t offset)
 {
 #ifdef NDNFS_DEBUG
-  cout << "read_version: " << path << ", " << version << ", " << size << ", " << offset << endl;
+  cout << "read_version: " << path << ", " << ver << ", " << size << ", " << offset << endl;
 #endif
 
     sqlite3_stmt *stmt;
     sqlite3_prepare_v2(db, "SELECT * FROM file_versions WHERE path = ? AND version = ?;", -1, &stmt, 0);
     sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
-    sqlite3_bind_int64(stmt, 2, version);
-
-    string ver_path(path);
-    ver_path += "/" + lexical_cast<string>(version);
+    sqlite3_bind_int64(stmt, 2, ver);
 
     int res = sqlite3_step(stmt);
 
@@ -60,7 +58,7 @@ int read_version(const char *path, uint64_t version, char *output, size_t size, 
     int seg_off = seek_segment(offset);
 
     // Read first segment starting from some offset
-    int total_read = read_segment(ver_path, seg_off, output, size, (offset - segment_to_size(seg_off)));
+    int total_read = read_segment(path, ver, seg_off, output, size, (offset - segment_to_size(seg_off)));
     cout << total_read << endl;
     if (total_read == -1) {
 	return 0;
@@ -71,7 +69,7 @@ int read_version(const char *path, uint64_t version, char *output, size_t size, 
     int seg_read = 0;
     while (size > 0) {
 	// Read the rest of the segments starting at zero offset
-	seg_read = read_segment(ver_path, seg_off++, output + total_read, size, 0);
+        seg_read = read_segment(path, ver, seg_off++, output + total_read, size, 0);
 	if (seg_read == -1) {
 	    // If anything is wrong when reading segments, just return what we have got already
 	    break;
@@ -84,25 +82,23 @@ int read_version(const char *path, uint64_t version, char *output, size_t size, 
 }
 
 
-int write_temp_version(const string& path, uint64_t current_ver, uint64_t temp_ver, const char *buf, size_t size, off_t offset)
+int write_temp_version(const char* path, const uint64_t current_ver, const uint64_t temp_ver, const char *buf, size_t size, off_t offset)
 {
 #ifdef NDNFS_DEBUG
-  cout << "write_temp_version: " << path << ", " << current_ver << ", " << temp_ver << ", " << size << ", " << offset << endl;
-#endif
-
-  for (int i = 0; i < size; i++) {
-      cout << buf[i];
+    cout << "write_temp_version: " << path << ", " << current_ver << ", " << temp_ver << ", size=" << size << ", offset=" << offset << endl;
+    cout << "write_temp_version: content to write is " << endl;
+    for (int i = 0; i < size; i++) {
+        cout << buf[i];
     }
-  cout << "haha" << endl;
+    cout << endl;
+#endif
 
     int seg_off = seek_segment(offset);
 
     sqlite3_stmt *stmt;
     sqlite3_prepare_v2(db, "SELECT * FROM file_versions WHERE path = ? AND version = ?;", -1, &stmt, 0);
-    sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
     sqlite3_bind_int64(stmt, 2, temp_ver);
-
-    string tmp_ver_path = path + "/" + lexical_cast<string>(temp_ver);
     
     if (sqlite3_step(stmt) != SQLITE_ROW) {
 #ifdef NDNFS_DEBUG
@@ -118,7 +114,7 @@ int write_temp_version(const string& path, uint64_t current_ver, uint64_t temp_v
 	    sqlite3_finalize(stmt);
 	    sqlite3_prepare_v2(db, "SELECT * FROM file_versions WHERE path = ? AND version = ?;", -1, &stmt, 0);
 	    sqlite3_bind_int64(stmt,2, current_ver);
-	    sqlite3_bind_text(stmt, 1,path.c_str(), -1, SQLITE_STATIC);
+	    sqlite3_bind_text(stmt, 1,path, -1, SQLITE_STATIC);
 	    if (sqlite3_step(stmt) != SQLITE_ROW){
 	        sqlite3_finalize(stmt);
 	        return -1;
@@ -138,24 +134,25 @@ int write_temp_version(const string& path, uint64_t current_ver, uint64_t temp_v
 	    int i = 0;
 	    int tail = offset;
 	    while (tail > 0) {
-	        string seg_path = path + "/" + lexical_cast<string>(current_ver) + "/" + lexical_cast<string> (i);
-		sqlite3_finalize(stmt);
-		sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ?;", -1, &stmt, 0);
-		sqlite3_bind_text(stmt, 1, seg_path.c_str(), -1, SQLITE_STATIC);
+	        sqlite3_finalize(stmt);
+		sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ? AND version = ? AND segment = ?;", -1, &stmt, 0);
+		sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
+		sqlite3_bind_int64(stmt, 2, current_ver);
+		sqlite3_bind_int(stmt, 3, i);
 		if(sqlite3_step(stmt) != SQLITE_ROW){
 		    sqlite3_finalize(stmt);
 		    return -1;
 		}
 		
-		seg_raw = (const char *)sqlite3_column_blob(stmt, 1);
-		seg_len = sqlite3_column_bytes(stmt,1);
+		seg_raw = (const char *)sqlite3_column_blob(stmt, 3);
+		seg_len = sqlite3_column_bytes(stmt,3 );
 		
-		Ptr<Blob> seg_Blob = Create<Blob>(seg_raw, seg_len);////
-		Ptr<const Blob> seg_blob = seg_Blob;////
-		Ptr<Data> seg = Data::decodeFromWire(seg_blob);////
-		Blob & seg_content = seg->content();////
-		data_len = (seg_content.size() > tail) ? tail : seg_content.size();////
-		data = (const char*)seg_content.buf();////
+		Ptr<Blob> seg_Blob = Create<Blob>(seg_raw, seg_len);
+		Ptr<const Blob> seg_blob = seg_Blob;
+		Ptr<Data> seg = Data::decodeFromWire(seg_blob);
+		Blob & seg_content = seg->content();
+		data_len = (seg_content.size() > tail) ? tail : seg_content.size();
+		data = (const char*)seg_content.buf();
 		
 		make_segment(path, temp_ver, i, false, data, data_len);
 		    
@@ -169,12 +166,11 @@ int write_temp_version(const string& path, uint64_t current_ver, uint64_t temp_v
         // Insert temp version entry
 	sqlite3_finalize(stmt);
 	sqlite3_prepare_v2(db, "INSERT INTO file_versions (path, version, size, totalSegments) VALUES (?,?,?,?);", -1, &stmt, 0);
-	sqlite3_bind_text(stmt,1,path.c_str(),-1,SQLITE_STATIC);
+	sqlite3_bind_text(stmt,1,path,-1,SQLITE_STATIC);
 	sqlite3_bind_int64(stmt,2,temp_ver);
 	sqlite3_bind_int(stmt,3,offset);
 	sqlite3_bind_int(stmt,4,total_segment);
 	int res = sqlite3_step(stmt);
-	cout << "res: " << std::dec << res << endl;
 	if(res != SQLITE_OK && res != SQLITE_DONE){
 	    sqlite3_finalize(stmt);
 	    return -1;
@@ -186,29 +182,27 @@ int write_temp_version(const string& path, uint64_t current_ver, uint64_t temp_v
     size_t size_left = size;
     bool final = false;
     int tail = offset - segment_to_size(seg_off);
-
-    cout << "tail: " << tail << endl;
     
     if (tail > 0) {	
         // Special handling for the 'seg_off' segment
-        string seg_path = path + "/" + lexical_cast<string> (temp_ver) + "/" + lexical_cast<string> (seg_off);
-	cout << seg_path << endl;
-	sqlite3_finalize(stmt);
-	sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ?;", -1, &stmt, 0);
-	sqlite3_bind_text(stmt, 1, seg_path.c_str(), -1, SQLITE_STATIC);
+        sqlite3_finalize(stmt);
+	sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ? AND version = ? AND segment = ?;", -1, &stmt, 0);
+	sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
+	sqlite3_bind_int64(stmt, 2, temp_ver);
+	sqlite3_bind_int(stmt, 3, seg_off);
 	if (sqlite3_step(stmt) != SQLITE_ROW) {
 	    sqlite3_finalize(stmt);
 	    return -1;
 	}
     	
-	int seg_len = sqlite3_column_bytes(stmt,1);
-	const char *seg_raw = (const char *)sqlite3_column_blob(stmt,1);
+	int seg_len = sqlite3_column_bytes(stmt, 3);
+	const char *seg_raw = (const char *)sqlite3_column_blob(stmt, 3);
 	
 	if (seg_len > 0) {
-	    Ptr<Blob> seg_Blob = Create<Blob>(seg_raw, seg_len);////
-	    Ptr<const Blob> seg_blob = seg_Blob;////
-	    Ptr<Data> seg = Data::decodeFromWire(seg_blob);////
-	    Blob & seg_content = seg->content();////
+	    Ptr<Blob> seg_Blob = Create<Blob>(seg_raw, seg_len);
+	    Ptr<const Blob> seg_blob = seg_Blob;
+	    Ptr<Data> seg = Data::decodeFromWire(seg_blob);
+	    Blob & seg_content = seg->content();
 	    
 	    assert(tail < seg_content.size());
 	    const char *old_data = (const char*)seg_content.buf();
@@ -242,14 +236,13 @@ int write_temp_version(const string& path, uint64_t current_ver, uint64_t temp_v
 	}
     }
     
-    cout << "size_left: " << size_left << endl;
     while (size_left > 0) {
         int copy_len = ndnfs::seg_size;
 	if (copy_len > size_left) {
 	    copy_len = size_left;
 	    final = true;
 	}
-	cout << "copy_len: " << copy_len << endl;
+
 	make_segment(path, temp_ver, seg_off++, final, buf_pos, copy_len);
 	buf_pos += copy_len;
 	size_left -= copy_len;
@@ -264,7 +257,7 @@ out:
     sqlite3_prepare_v2(db, "UPDATE file_versions SET size = ?, totalSegments = ? WHERE path = ? AND version = ?;", -1, &stmt, 0);
     sqlite3_bind_int(stmt, 1, (int)(offset+size));
     sqlite3_bind_int(stmt, 2, seg_off);
-    sqlite3_bind_text(stmt, 3, path.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 3, path, -1, SQLITE_STATIC);
     sqlite3_bind_int64(stmt, 4, temp_ver);
     int res = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
@@ -275,21 +268,19 @@ out:
 }
 
 
-int truncate_temp_version(const string& path, uint64_t current_ver, uint64_t temp_ver, off_t length)
+int truncate_temp_version(const char* path, const uint64_t current_ver, const uint64_t temp_ver, off_t length)
 {
 #ifdef NDNFS_DEBUG
-  cout << "truncate_temp_version: " << path << ", " << current_ver << ", " << temp_ver << endl;
+  cout << "truncate_temp_version: " << path << ", " << current_ver << ", " << temp_ver << ", " << length << endl;
 #endif
 
     int seg_off = seek_segment(length);
 
     sqlite3_stmt *stmt;
     sqlite3_prepare_v2(db, "SELECT * FROM file_versions WHERE path = ? AND version = ?;", -1, &stmt, 0);
-    sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
     sqlite3_bind_int64(stmt, 2, temp_ver);
 
-    string tmp_ver_path = path + "/" + lexical_cast<string>(temp_ver);
-    
     if(sqlite3_step(stmt) != SQLITE_ROW){
 	// *copy-on-write* strategy:
 	// If temp version is not inserted, create a new entry for the temp version.
@@ -300,8 +291,8 @@ int truncate_temp_version(const string& path, uint64_t current_ver, uint64_t tem
 	    // Copy data from current version 
 	    sqlite3_finalize(stmt);
 	    sqlite3_prepare_v2(db, "SELECT * FROM file_versions WHERE path = ? AND version = ?;", -1, &stmt, 0);
-	    sqlite3_bind_int64(stmt,2, current_ver);
-	    sqlite3_bind_text(stmt, 1,path.c_str(), -1, SQLITE_STATIC);
+	    sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
+	    sqlite3_bind_int64(stmt, 2, current_ver);
 	    if (sqlite3_step(stmt) != SQLITE_ROW){
 	        return -1;
 	    }
@@ -319,31 +310,25 @@ int truncate_temp_version(const string& path, uint64_t current_ver, uint64_t tem
 	    int i = 0;
 	    int tail = length;
 	    while (tail > 0) {
-	        string seg_path = path + "/"+ lexical_cast<string>(current_ver) + "/" + lexical_cast<string> (i);
-
-		sqlite3_finalize(stmt);
-		sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ?;", -1, &stmt, 0);
-		sqlite3_bind_text(stmt, 1, seg_path.c_str(), -1, SQLITE_STATIC);
+	        sqlite3_finalize(stmt);
+		sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ? AND version = ? AND segment = ?;", -1, &stmt, 0);
+		sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
+		sqlite3_bind_int64(stmt, 2, current_ver);
+		sqlite3_bind_int(stmt, 3, i);
 		if(sqlite3_step(stmt) != SQLITE_ROW){
 		    return -1;
 		}
 
-		seg_raw = (const char *)sqlite3_column_blob(stmt, 1);
-		seg_len = sqlite3_column_bytes(stmt,1);
+		seg_raw = (const char *)sqlite3_column_blob(stmt, 3);
+		seg_len = sqlite3_column_bytes(stmt, 3);
 		
-		Ptr<Blob> seg_Blob = Create<Blob>(seg_raw, seg_len);////
-		Ptr<const Blob> seg_blob = seg_Blob;////
-		Ptr<Data> seg = Data::decodeFromWire(seg_blob);////
-		Blob & seg_content = seg->content();////
+		Ptr<Blob> seg_Blob = Create<Blob>(seg_raw, seg_len);
+		Ptr<const Blob> seg_blob = seg_Blob;
+		Ptr<Data> seg = Data::decodeFromWire(seg_blob);
+		Blob & seg_content = seg->content();
         
-		data_len = (seg_content.size() > tail) ? tail : seg_content.size();////
-		data = (const char*)seg_content.buf();////
-        
-				////ndn::ParsedContentObject pco((const unsigned char *)seg_raw, seg_len);
-				////ndn::BytesPtr seg_content = pco.contentPtr();
-    
-				////data_len = (seg_content->size() > tail) ? tail : seg_content->size();
-				////data = (const char *)ndn::head(*seg_content);
+		data_len = (seg_content.size() > tail) ? tail : seg_content.size();
+		data = (const char*)seg_content.buf();
 		
 		make_segment(path, temp_ver, i, false, data, data_len);
 		
@@ -356,7 +341,7 @@ int truncate_temp_version(const string& path, uint64_t current_ver, uint64_t tem
 	
 	sqlite3_finalize(stmt);
 	sqlite3_prepare_v2(db, "INSERT INTO file_versions (path, version, size, totalSegments) VALUES (?,?,?,?);", -1, &stmt, 0);
-	sqlite3_bind_text(stmt,1,path.c_str(),-1,SQLITE_STATIC);
+	sqlite3_bind_text(stmt,1,path,-1,SQLITE_STATIC);
 	sqlite3_bind_int64(stmt,2,temp_ver);
 	sqlite3_bind_int(stmt,3,length);
 	sqlite3_bind_int(stmt,4,total_segment);
@@ -377,17 +362,17 @@ int truncate_temp_version(const string& path, uint64_t current_ver, uint64_t tem
 
 	sqlite3_finalize(stmt);
 	sqlite3_prepare_v2(db, "UPDATE file_versions SET size = ?, totalSegments = ? WHERE path = ? and version = ?;", -1, &stmt, 0);
-    sqlite3_bind_int(stmt,1,(int)(length));
+	sqlite3_bind_int(stmt,1,(int)(length));
 	sqlite3_bind_int(stmt, 2, seg_end);
-    sqlite3_bind_text(stmt, 3, path.c_str(), -1, SQLITE_STATIC);
+	sqlite3_bind_text(stmt, 3, path, -1, SQLITE_STATIC);
 	sqlite3_bind_int64(stmt, 4, temp_ver);
-    if (sqlite3_step(stmt) != SQLITE_ROW){
-        return -1;
-    }
-    sqlite3_finalize(stmt);
+	if (sqlite3_step(stmt) != SQLITE_ROW){
+	    return -1;
+	}
+	sqlite3_finalize(stmt);
 	// Update version size and segment list
 	int tail = length - segment_to_size(seg_end);
-	truncate_segment(tmp_ver_path, seg_end, tail);
+	truncate_segment(path, temp_ver, seg_end, tail);
 	remove_segments(path, temp_ver, seg_end + 1);
 	
 	return 0;
@@ -398,7 +383,7 @@ int truncate_temp_version(const string& path, uint64_t current_ver, uint64_t tem
 }
 
 
-void remove_version(const char* path, uint64_t version)
+void remove_version(const char* path, const uint64_t version)
 {
 #ifdef NDNFS_DEBUG
   cout << "remove_version: " << path << ", " << version << endl;
@@ -425,11 +410,10 @@ void remove_versions(const char* path)
     sqlite3_prepare_v2(db, "SELECT current_version, temp_version FROM file_system WHERE path = ?;", -1, &stmt, 0);
     sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
     int res = sqlite3_step(stmt);
-    cout << std::dec << res << endl;
     if(res == SQLITE_ROW){
         uint64_t curr_ver = sqlite3_column_int64(stmt, 0);
 	if (curr_ver != -1) {
-	  remove_version(path, curr_ver);
+	    remove_version(path, curr_ver);
 	}
 
 	uint64_t tmp_ver = sqlite3_column_int64(stmt, 1);

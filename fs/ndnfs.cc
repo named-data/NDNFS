@@ -127,7 +127,8 @@ CREATE TABLE IF NOT EXISTS                        \n\
     temp_version         INTEGER,                 \n\
     PRIMARY KEY (path)                            \n\
   );                                              \n\
-CREATE INDEX id_fs ON file_system (path);         \n\
+CREATE INDEX id_path ON file_system (path);       \n\
+CREATE INDEX id_parent ON file_system (parent);   \n\
 ";
 
     sqlite3_exec(db, INIT_FS_TABLE, NULL, NULL, NULL);
@@ -147,14 +148,16 @@ CREATE INDEX id_ver ON file_versions (path, version);        \n\
     sqlite3_exec(db, INIT_VER_TABLE, NULL, NULL, NULL);
 
     const char* INIT_SEG_TABLE = "\
-CREATE TABLE IF NOT EXISTS                        \n\
-  file_segments(                                  \n\
-    path        TEXT NOT NULL,                    \n\
-    data        BLOB NOT NULL,                    \n\
-    offset      INTEGER,                          \n\
-    PRIMARY KEY (path)                            \n\
-  );                                              \n\
-CREATE INDEX id_seg ON file_segments (path);      \n\
+CREATE TABLE IF NOT EXISTS                                        \n\
+  file_segments(                                                  \n\
+    path        TEXT NOT NULL,                                    \n\
+    version     INTEGER,                                          \n\
+    segment     INTEGER,                                          \n\
+    data        BLOB NOT NULL,                                    \n\
+    offset      INTEGER,                                          \n\
+    PRIMARY KEY (path, version, segment)                          \n\
+  );                                                              \n\
+CREATE INDEX id_seg ON file_segments (path, version, segment);    \n\
 ";
 
     sqlite3_exec(db, INIT_SEG_TABLE, NULL, NULL, NULL);
@@ -177,13 +180,13 @@ CREATE INDEX id_seg ON file_segments (path);      \n\
     sqlite3_bind_int(stmt, 7, -1);  // size
     sqlite3_bind_int64(stmt, 8, -1);  // current version
     sqlite3_bind_int64(stmt, 9, -1);  // temp version
- 
-    if (sqlite3_step(stmt) == SQLITE_OK) {
+    int res = sqlite3_step(stmt);
+    if (res == SQLITE_OK || res == SQLITE_DONE) {
       cout << "main: OK" << endl;
     }
 
-   sqlite3_finalize(stmt);
-
+    sqlite3_finalize(stmt);
+    
     create_fuse_operations(&ndnfs_fs_ops);
     
     cout << "main: enter FUSE main loop" << endl << endl;

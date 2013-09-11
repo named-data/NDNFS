@@ -262,9 +262,10 @@ int ndnfs_truncate(const char *path, off_t length)
 
     int ret = truncate_temp_version(path, curr_ver, temp_ver, length);
 
-    sqlite3_prepare_v2(db, "UPDATE file_system SET mtime = ? WHERE path = ?;", -1, &stmt, 0);
-    sqlite3_bind_int(stmt, 1, (int)time(0));
-    sqlite3_bind_text(stmt, 2, path, -1, SQLITE_STATIC);
+    sqlite3_prepare_v2(db, "UPDATE file_system SET size = ?, mtime = ? WHERE path = ?;", -1, &stmt, 0);
+    sqlite3_bind_int(stmt, 1, (int)length);
+    sqlite3_bind_int(stmt, 2, (int)time(0));
+    sqlite3_bind_text(stmt, 3, path, -1, SQLITE_STATIC);
     sqlite3_step(stmt);
     sqlite3_finalize(stmt);
 
@@ -358,17 +359,17 @@ int ndnfs_release(const char *path, struct fuse_file_info *fi)
 	    // Update version number and remove old version
 	    int size = sqlite3_column_int(stmt, 2);
 
-
 	    sqlite3_stmt *stmt2;
 	    sqlite3_prepare_v2(db, "UPDATE file_system SET size = ?, current_version = ?, temp_version = ? WHERE path = ?;", -1, &stmt2, 0);
 	    sqlite3_bind_int(stmt2, 1, size);
-	    sqlite3_bind_int64(stmt2, 2, temp_ver);  // current_version
-	    sqlite3_bind_int64(stmt2, 3, (uint64_t)-1);  // temp_version
+	    sqlite3_bind_int64(stmt2, 2, temp_ver);  // set current_version to the original temp_version
+	    sqlite3_bind_int64(stmt2, 3, (uint64_t)-1);  // set temp_version to -1
 	    sqlite3_bind_text(stmt2, 4, path, -1, SQLITE_STATIC);
 	    sqlite3_step(stmt2);
 	    sqlite3_finalize(stmt2);
 
-	    remove_version(path, curr_ver);
+	    if (curr_ver != -1)
+	        remove_version(path, curr_ver);
 	}
 	sqlite3_finalize(stmt);
     }

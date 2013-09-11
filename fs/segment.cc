@@ -15,14 +15,13 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *
  * Author: Wentao Shang <wentao@cs.ucla.edu>
+ *         Qiuhan Ding <dingqiuhan@gmail.com>
  */
 
 #include "segment.h"
 #include <ndn.cxx/data.h>
 #include <ndn.cxx/common.h>
 #include <ndn.cxx/security/exception.h>
-
-#include <boost/lexical_cast.hpp>
 
 #include <ndn.cxx/helpers/uri.h>
 
@@ -32,45 +31,54 @@ using namespace std;
 using namespace boost;
 using namespace ndn;
 
-int read_segment(const string& ver_path, const int seg, char *output, const int limit, const int offset)
+int read_segment(const char* path, const uint64_t ver, const int seg, char *output, const int limit, const int offset)
 {
 #ifdef NDNFS_DEBUG
-  cout << "read_segment: " << ver_path << ", " << seg << ", " << limit << ", " << offset << endl;
+  cout << "read_segment: " << path << ", " << ver << ", " << seg << ", " << limit << ", " << offset << endl;
 #endif
-
-    string segment = lexical_cast<string> (seg);
-    string seg_path = ver_path + "/" + segment;
 
     const char*co_raw;
     int co_size;
     sqlite3_stmt *stmt;
-    sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ?;", -1, &stmt, 0);
-    sqlite3_bind_text(stmt, 1, seg_path.c_str(), -1, SQLITE_STATIC);
+    sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ? AND version = ? AND segment = ?;", -1, &stmt, 0);
+    sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
+    sqlite3_bind_int64(stmt, 2, ver);
+    sqlite3_bind_int(stmt, 3, seg);
     if (sqlite3_step(stmt) != SQLITE_ROW) {
         sqlite3_finalize(stmt);
         return -1;
     }
 
-    co_raw = (const char*) sqlite3_column_blob(stmt,1);
-    co_size = sqlite3_column_bytes(stmt,1);
+    co_raw = (const char*) sqlite3_column_blob(stmt, 3);
+    co_size = sqlite3_column_bytes(stmt, 3);
 
-    Ptr<Blob> data_Blob = Create<Blob>(co_raw,co_size);////
-    Ptr<const Blob> data = data_Blob;////
-    Blob & data_content = Data::decodeFromWire(data)->content();///////
-    const char *content = (const char*)data_content.buf();//////
+    Ptr<Blob> data_Blob = Create<Blob>(co_raw, co_size);
+    Ptr<const Blob> data = data_Blob;
+    const Blob& data_content = Data::decodeFromWire(data)->content();
+    const char *content = data_content.buf();
+
+#ifdef NDNFS_DEBUG
+    cout << "read_segment: raw data is " << endl;
     for (int i = 0; i < co_size; i++) {
       cout << co_raw[i];
     }
     cout << endl;
-    cout << co_size << endl;
-    cout << content[0] << endl;
+    cout << "read_segment: raw data length is " << co_size << endl;
+#endif
 
-    int copy_len = data_content.size();///////
-    cout << copy_len << endl;
+    int copy_len = data_content.size();
     if (copy_len > limit)  // Don't write across the limit
 	copy_len = limit;
 
-    memcpy(output, content + offset, copy_len);/////
+#ifdef NDNFS_DEBUG
+    cout << "read_segment: content to copy is " << endl;
+    for (int i = 0; i < copy_len; i++)
+        cout << content[offset + i];
+    cout << endl;
+    cout << "read_segment: copy length is " << copy_len << endl;
+#endif
+
+    memcpy(output, content + offset, copy_len);
     
     sqlite3_finalize(stmt);
     
@@ -78,18 +86,15 @@ int read_segment(const string& ver_path, const int seg, char *output, const int 
 }
 
 
-int make_segment(const string& file_path, const uint64_t ver, const int seg, const bool final, const char *data, const int len)
+int make_segment(const char* path, const uint64_t ver, const int seg, const bool final, const char *data, const int len)
 {
 #ifdef NDNFS_DEBUG
-    cout << "make_segment: " << file_path << ", " << ver << ", " << seg <<", " << endl;
+    cout << "make_segment: " << path << ", " << ver << ", " << seg << ", " << len << endl;
 #endif
 
     assert(len > 0);
 
-    string version = lexical_cast<string> (ver);
-    string segment = lexical_cast<string> (seg);
-    string ver_path = file_path + "/" + version;
-    string full_path = ver_path + "/" + segment;
+    string file_path(path);
     string full_name = ndnfs::global_prefix + file_path;
     string escaped_name;
     Uri::toEscaped(full_name.begin(), full_name.end(), back_inserter(escaped_name));
@@ -98,7 +103,7 @@ int make_segment(const string& file_path, const uint64_t ver, const int seg, con
     seg_name.appendVersion(ver);
     seg_name.appendSeqNum(seg);
 #ifdef NDNFS_DEBUG
-    cout << "seg_name is " << seg_name.toUri() << endl;
+    cout << "make_segment: segment name is " << seg_name.toUri() << endl;
 #endif
 
     Content co(data,len);
@@ -106,42 +111,47 @@ int make_segment(const string& file_path, const uint64_t ver, const int seg, con
     data0.setName(seg_name);
     data0.setContent(co);
     try{
-      keychain->sign(data0,signer);////XXXXXXXXXXX
-    }catch(security::SecException & e){
-      cerr << e.Msg() << endl;
-      cerr << data0.getName() << endl;
+        keychain->sign(data0,signer);
+    } catch(security::SecException & e) {
+        cerr << e.Msg() << endl;
+        cerr << data0.getName() << endl;
     }
     Ptr<Blob> wire_data = data0.encodeToWire();
     char* co_raw = wire_data->buf();
     int co_size = wire_data->size();
 
+#ifdef NDNFS_DEBUG
+    cout << "make_segment: raw data is" << endl;
     for (int i = 0; i < co_size; i++) {
       cout << co_raw[i];
     }
     cout << endl;
-    cout << co_size << endl;
+    cout << "make_segment: raw data length is " << co_size << endl;
+#endif
 
     sqlite3_stmt *stmt;
-    sqlite3_prepare_v2(db, "INSERT INTO file_segments (path,data,offset) VALUES (?,?,?);", -1, &stmt, 0);
-    sqlite3_bind_text(stmt,1,full_path.c_str(),-1,SQLITE_STATIC);
-    sqlite3_bind_blob(stmt,2,co_raw,co_size,SQLITE_STATIC);
-    sqlite3_bind_int(stmt,3,segment_to_size(seg));
+    sqlite3_prepare_v2(db, "INSERT INTO file_segments (path,version,segment,data,offset) VALUES (?,?,?,?,?);", -1, &stmt, 0);
+    sqlite3_bind_text(stmt,1,path,-1,SQLITE_STATIC);
+    sqlite3_bind_int64(stmt,2,ver);
+    sqlite3_bind_int(stmt,3,seg);
+    sqlite3_bind_blob(stmt,4,co_raw,co_size,SQLITE_STATIC);
+    sqlite3_bind_int(stmt,5,segment_to_size(seg));
     sqlite3_step(stmt);
     sqlite3_finalize(stmt);
 
     return 0;
 }
 
-void remove_segments(const string& path, uint64_t version, const int start/* = 0 */)
+void remove_segments(const char* path, const uint64_t ver, const int start/* = 0 */)
 {
 #ifdef NDNFS_DEBUG
-  cout << "remove_segments: " << path << ", " << version << ", " << start << endl;
+  cout << "remove_segments: " << path << ", " << ver << ", from segment #" << start << endl;
 #endif
 
     sqlite3_stmt *stmt;
     sqlite3_prepare_v2(db, "SELECT totalSegments FROM file_versions WHERE path = ? AND version = ?;", -1, &stmt, 0);
-    sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_int64(stmt, 2, version);
+    sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
+    sqlite3_bind_int64(stmt, 2, ver);
     int res = sqlite3_step(stmt);
     if (res != SQLITE_ROW) {
         sqlite3_finalize(stmt);
@@ -151,58 +161,62 @@ void remove_segments(const string& path, uint64_t version, const int start/* = 0
     sqlite3_finalize(stmt);
 
     for (int i = start; i < segs; i++) {
-        string seg_path = path + "/" + lexical_cast<string> (version) + "/" + lexical_cast<string> (i);
-        sqlite3_prepare_v2(db, "DELETE FROM file_segments WHERE path = ?;", -1, &stmt, 0);
-	sqlite3_bind_text(stmt, 1, seg_path.c_str(), -1, SQLITE_STATIC);
+        sqlite3_prepare_v2(db, "DELETE FROM file_segments WHERE path = ? AND version = ? AND segment = ?;", -1, &stmt, 0);
+	sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
+	sqlite3_bind_int64(stmt, 2, ver);
+	sqlite3_bind_int(stmt, 3, i);
 	sqlite3_step(stmt);
 	sqlite3_finalize(stmt);
     }
 }
 
-void truncate_segment(const string& ver_path, const int seg, const off_t length)
+void truncate_segment(const char* path, const uint64_t ver, const int seg, const off_t length)
 {
 #ifdef NDNFS_DEBUG
-  cout << "truncate_segment: " << ver_path << ", " << seg << endl;
+  cout << "truncate_segment: " << path << ", " << ver << ", " << seg << ", " << length << endl;
 #endif
 
-    string seg_path = ver_path + "/" + lexical_cast<string> (seg);
-    
     sqlite3_stmt *stmt;
-    sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ?;", -1, &stmt, 0);
-    sqlite3_bind_text(stmt, 1, seg_path.c_str(), -1, SQLITE_STATIC);
+    sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ? AND version = ? AND segment = ?;", -1, &stmt, 0);
+    sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
+    sqlite3_bind_int64(stmt, 2, ver);
+    sqlite3_bind_int(stmt, 3, seg);
     if(sqlite3_step(stmt) == SQLITE_ROW) {
         if (length == 0) {
 	  sqlite3_finalize(stmt);
-	  sqlite3_prepare_v2(db, "UPDATE file_segments SET data = ? WHERE path = ?;", -1, &stmt, 0);
-	  sqlite3_bind_blob(stmt, 1, NULL, -1, SQLITE_STATIC);
-	  sqlite3_bind_text(stmt, 2, seg_path.c_str(), -1, SQLITE_STATIC);
+	  sqlite3_prepare_v2(db, "DELETE FROM file_segments WHERE path = ? AND version = ? AND segment = ?;", -1, &stmt, 0);
+	  sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
+	  sqlite3_bind_int64(stmt, 2, ver);
+          sqlite3_bind_int(stmt, 3, seg);
 	  sqlite3_step(stmt);
 	  sqlite3_finalize(stmt);
 	} else {
-	  const char* co_raw = (const char *)sqlite3_column_blob(stmt,1);
-	  int co_size = sqlite3_column_bytes(stmt,1);
+	  const char* co_raw = (const char *)sqlite3_column_blob(stmt, 3);
+	  int co_size = sqlite3_column_bytes(stmt, 3);
 
 	  assert(co_size > (int)length);
 
-	  Ptr<Blob> data_Blob = Create<Blob>(co_raw,co_size);////
-	  Ptr<const Blob> data_blob = data_Blob;////
-	  Ptr<Data> data = Data::decodeFromWire(data_blob);////
-	  Blob & data_content = data->content();////
-	  const char *content = (const char*)data_content.buf();////
+	  Ptr<Blob> data_Blob = Create<Blob>(co_raw,co_size);
+	  Ptr<const Blob> data_blob = data_Blob;
+	  Ptr<Data> data = Data::decodeFromWire(data_blob);
+	  const Blob& data_content = data->content();
+	  const char *content = data_content.buf();
 
-	  Content co(content,length);////
-	  Data trunc_data;////
-	  trunc_data.setName(data->getName());////
-	  trunc_data.setContent(co);////
-	  keychain->sign(trunc_data,signer);////XXXXXX
-	  Ptr<Blob> wire_data = trunc_data.encodeToWire();////
-	  char *trunc_co_raw = wire_data->buf();////
-	  int trunc_co_size = wire_data->size();////
+	  Content co(content,length);
+	  Data trunc_data;
+	  trunc_data.setName(data->getName());
+	  trunc_data.setContent(co);
+	  keychain->sign(trunc_data,signer);
+	  Ptr<Blob> wire_data = trunc_data.encodeToWire();
+	  char *trunc_co_raw = wire_data->buf();
+	  int trunc_co_size = wire_data->size();
 
 	  sqlite3_finalize(stmt);
-	  sqlite3_prepare_v2(db, "UPDATE file_segments SET data = ? WHERE path = ?;", -1, &stmt, 0);
+	  sqlite3_prepare_v2(db, "UPDATE file_segments SET data = ? WHERE path = ? AND version = ? AND segment = ?;", -1, &stmt, 0);
 	  sqlite3_bind_blob(stmt, 1, trunc_co_raw, trunc_co_size, SQLITE_STATIC);
-	  sqlite3_bind_text(stmt, 2, seg_path.c_str(), -1, SQLITE_STATIC);
+	  sqlite3_bind_text(stmt, 2, path, -1, SQLITE_STATIC);
+	  sqlite3_bind_int64(stmt, 3, ver);
+          sqlite3_bind_int(stmt, 4, seg);
 	  sqlite3_step(stmt);
 	  sqlite3_finalize(stmt);
 	}

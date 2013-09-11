@@ -75,7 +75,7 @@ publishAllCert(Ptr<Wrapper> wrapper)
 }
 
 int main(int argc, char **argv) {
-    const char* prefix = "/";
+    const char* prefix = "/ndn/ucla.edu/qiuhan/dummy/ndnfs";
     int opt;
 
     while ((opt = getopt(argc, argv, "p:d:")) != -1) {

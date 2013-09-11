@@ -37,7 +37,6 @@
 #include <fuse.h>
 #include <sqlite3.h>
 
-#include <boost/lexical_cast.hpp>
 #include <ndn.cxx/security/keychain.h>
 #include <ndn.cxx/security/identity/osx-privatekey-store.h>
 #include <ndn.cxx/common.h>
