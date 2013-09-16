@@ -59,7 +59,7 @@ void Usage() {
 
 void verifiedError(Ptr<Interest> interest)
 {
-  cout << "unverified" << endl;
+    cout << "unverified" << endl;
 }
 
 
@@ -75,38 +75,38 @@ int main (int argc, char **argv) {
 
     int opt;
     while ((opt = getopt(argc, argv, "n:i:a:c:")) != -1) {
-	switch (opt) {
-	case 'n': 
-	    name = optarg;
-	    cout << "main(): set name: " << name << endl;
-	    interestPtr->setName(ndn::Name(name));
-	    break;
-	case 'i': 
-	    min_suffix_comps = atoi(optarg);
-	    cout << "main(): set min suffix components: " << min_suffix_comps << endl;
-	    interestPtr->setMinSuffixComponents(min_suffix_comps);
-	    break;
-	case 'a': 
-	    max_suffix_comps = atoi(optarg);
-	    cout << "main(): set max suffix components: " << max_suffix_comps << endl;
-	    interestPtr->setMaxSuffixComponents(max_suffix_comps);
-	    break;
-	case 'c': 
-	    child_selector = atoi(optarg);
-	    cout << "main(): set child selector: " << (uint32_t)child_selector << endl;
-	    interestPtr->setChildSelector(child_selector);
-	    break;
-	default: 
-	    Usage(); 
-	    break;
-	}
+        switch (opt) {
+        case 'n': 
+            name = optarg;
+            cout << "main(): set name: " << name << endl;
+            interestPtr->setName(ndn::Name(name));
+            break;
+        case 'i': 
+            min_suffix_comps = atoi(optarg);
+            cout << "main(): set min suffix components: " << min_suffix_comps << endl;
+            interestPtr->setMinSuffixComponents(min_suffix_comps);
+            break;
+        case 'a': 
+            max_suffix_comps = atoi(optarg);
+            cout << "main(): set max suffix components: " << max_suffix_comps << endl;
+            interestPtr->setMaxSuffixComponents(max_suffix_comps);
+            break;
+        case 'c': 
+            child_selector = atoi(optarg);
+            cout << "main(): set child selector: " << (uint32_t)child_selector << endl;
+            interestPtr->setChildSelector(child_selector);
+            break;
+        default: 
+            Usage(); 
+            break;
+        }
     }
     Ptr<Closure> closure = Ptr<Closure> (new Closure(boost::bind(OnData, _1),
                                                      boost::bind(OnTimeout, _1, _2),
                                                      boost::bind(verifiedError, _1),
                                                      Closure::UnverifiedDataCallback()
-                                                     )
-                                        );
+                                             )
+        );
     handler->sendInterest(interestPtr, closure);
     cout << "Interest sent" << endl;
 

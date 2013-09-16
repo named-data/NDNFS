@@ -86,13 +86,13 @@ def build (bld):
         use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD CCNX SSL NDNCXX SQLITE3',
         includes = ".",
         )
-    # bld (
-    #     target = "test-client",
-    #     features = ["cxx", "cxxprogram"],
-    #     source = bld.path.ant_glob(['test/client.cc']),
-    #     use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD CCNX SSL NDNCXX',
-    #     includes = ".",
-    #     )
+    bld (
+        target = "test-client",
+        features = ["cxx", "cxxprogram"],
+        source = bld.path.ant_glob(['test/client.cc']),
+        use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD CCNX SSL NDNCXX',
+        includes = ".",
+        )
 
 @Configure.conf
 def add_supported_cxxflags(self, cxxflags):

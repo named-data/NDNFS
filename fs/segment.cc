@@ -26,6 +26,7 @@
 #include <ndn.cxx/helpers/uri.h>
 
 #include <iostream>
+#include <cstdio>
 
 using namespace std;
 using namespace boost;
@@ -122,7 +123,7 @@ int make_segment(const char* path, const uint64_t ver, const int seg, const bool
 #ifdef NDNFS_DEBUG
     cout << "make_segment: raw data is" << endl;
     for (int i = 0; i < co_size; i++) {
-        cout << co_raw[i];
+        printf("%02x", (unsigned char)co_raw[i]);
     }
     cout << endl;
     cout << "make_segment: raw data length is " << co_size << endl;

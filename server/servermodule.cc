@@ -16,9 +16,11 @@
  *
  * Author: Zhe Wen <wenzhe@cs.ucla.edu>
  */
-//#define DEBUG
+#define DEBUG
 
+#include <cstdio>
 #include <iostream>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -48,22 +50,45 @@ void OnInterest(Ptr<Interest> interest) {
     uint64_t version;
     int seg;
     int res = ProcessName(interest, version, seg, path);
+#ifdef DEBUG
+    cout << "OnInterest(): extracted version=" << (int64_t)version << ", segment=" << seg << ", path=" << path << endl;
+#endif
     if (res == -1) {
 		cout << "OnInterest(): no match found for prefix: " << interest->getName() << endl;
     }
     else {
-        //#ifdef DEBUG
 		cout << "OnInterest(): a match has been found for prefix: " << interest->getName() << endl;
-		cout << "OnInterest(): fetching content object ..." << endl;
+		cout << "OnInterest(): fetching content object from database" << endl;
 
-        int len;
-        const char* data = FetchData(version,seg,path, len);
-        ndn::Blob bin_data;
-        for (int i = 0; i < len; i++) {
-            bin_data.push_back(data[i]);
+        int len = -1;
+        const char* data = NULL;
+        sqlite3_stmt *stmt;
+        sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ? AND version = ? AND segment = ?", -1, &stmt, 0);
+        sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_STATIC);
+        sqlite3_bind_int64(stmt, 2, version);
+        sqlite3_bind_int(stmt, 3, seg);
+        if(sqlite3_step(stmt) == SQLITE_ROW){
+            const char * data = (const char *)sqlite3_column_blob(stmt, 3);
+            len = sqlite3_column_bytes(stmt, 3);
+#ifdef DEBUG
+            cout << "OnInterest(): blob length=" << len << endl;
+            cout << "OnInterest(): blob data is " << endl;
+            ofstream ofs("/tmp/blob", ios_base::binary);
+            for (int i = 0; i < len; i++) {
+                printf("%02x", (unsigned char)data[i]);
+                ofs << data[i];
+            }
+            cout << endl;
+#endif
+            ndn::Blob bin_data(data, len);
+            handler->putToCcnd(bin_data);
+            cout << "OnInterest(): content object returned and interest consumed" << endl;
         }
-        handler->putToCcnd(bin_data);
-        cout << "OnInterest(): content object returned and interest consumed" << endl;
+        else {
+            // query failed, no entry found
+            cerr << "FetchData(): error locating data: " << path << endl;
+        }
+        sqlite3_finalize(stmt);
     }
     cout << "OnInterest(): Done" << endl;
     cout << "------------------------------------------------------------" << endl;
@@ -71,7 +96,7 @@ void OnInterest(Ptr<Interest> interest) {
 
 // ndn-ndnfs name converter. converting name from ndn::Name representation to
 // string representation.
-void ndnName2String(ndn::Name name, uint64_t &version, int &seg, string &path) {
+void ndnName2String(const ndn::Name& name, uint64_t &version, int &seg, string &path) {
     path = "";
     string slash("/");
     version = -1;
@@ -79,7 +104,7 @@ void ndnName2String(ndn::Name name, uint64_t &version, int &seg, string &path) {
     ndn::Name::const_iterator iter = name.begin();
     for (; iter != name.end(); iter++) {
 #ifdef DEBUG
-        cout << "ndnName2String(): interest name component: " << comp << endl;
+        cout << "ndnName2String(): interest name component: " << iter->toUri() << endl;
 #endif
 		const uint8_t marker = *(iter->buf());
 		// cout << (unsigned int)marker << endl;
@@ -90,7 +115,7 @@ void ndnName2String(ndn::Name name, uint64_t &version, int &seg, string &path) {
 			seg = iter->toSeqNum();
 		}
 		else {
-			comp = iter->toUri();
+			string comp = iter->toUri();
 			path += (slash + comp);
 		}
 	
@@ -107,17 +132,20 @@ void ndnName2String(ndn::Name name, uint64_t &version, int &seg, string &path) {
 }
 
 
-int ProcessName(Ptr<Interest> interest,uint64_t &version, int &seg, string &path){
-	ndnName2String(interest->getName(),version,seg,path);
-	if(version>0 && seg>0){
+int ProcessName(Ptr<Interest> interest, uint64_t &version, int &seg, string &path){
+	ndnName2String(interest->getName(), version, seg, path);
+#ifdef DEBUG
+    cout << "ProcessName(): version=" << (int64_t)version << ", segment=" << seg << ", path=" << path << endl;
+#endif
+	if(version != -1 && seg != -1){
 		sqlite3_stmt *stmt;
-		sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ? AND version = ? AND segment = ?", -1 &stmt,0);
-		sqlite3_bind_text(stmt, 1, path.c_str(),SQLITE_STATIC);
-		sqlite3_bind_int64(stmt,2,version);
-		sqlite3_bind_int(stmt,3,seg);
+		sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ? AND version = ? AND segment = ?", -1, &stmt, 0);
+		sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_STATIC);
+		sqlite3_bind_int64(stmt, 2, version);
+		sqlite3_bind_int(stmt, 3, seg);
 		if(sqlite3_step(stmt)!= SQLITE_ROW){
 #ifdef DEBUG
-			cout << "ProcessName(): no such prefix/name found in ndnfs: " << path << endl;
+			cout << "ProcessName(): no such file/directory found in ndnfs: " << path << endl;
 #endif
 			sqlite3_finalize(stmt);
 			return -1;
@@ -125,15 +153,15 @@ int ProcessName(Ptr<Interest> interest,uint64_t &version, int &seg, string &path
 		sqlite3_finalize(stmt);
 		return 1;
 	}
-	else if(version>0){
+	else if(version != -1){
 		sqlite3_stmt *stmt;
-		sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ? AND version = ? AND segment = ?", -1 &stmt,0);
-		sqlite3_bind_text(stmt, 1, path.c_str(),SQLITE_STATIC);
-		sqlite3_bind_int64(stmt,2,version);
-		sqlite3_bind_int(stmt,3,0);
+		sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ? AND version = ? AND segment = ?", -1, &stmt, 0);
+		sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_STATIC);
+		sqlite3_bind_int64(stmt, 2, version);
+		sqlite3_bind_int(stmt,3, 0);
 		if(sqlite3_step(stmt)!= SQLITE_ROW){
 #ifdef DEBUG
-			cout << "ProcessName(): no such prefix/name found in ndnfs: " << ndn_name << endl;
+			cout << "ProcessName(): no such file/directory found in ndnfs: " << path << endl;
 #endif
 			sqlite3_finalize(stmt);
 			return -1;
@@ -144,11 +172,11 @@ int ProcessName(Ptr<Interest> interest,uint64_t &version, int &seg, string &path
 	}
 	else{
 		sqlite3_stmt *stmt;
-		sqlite3_prepare_v2(db, "SELECT * FROM file_system WHERE path = ?", -1 &stmt,0);
-		sqlite3_bind_text(stmt, 1, path.c_str(),SQLITE_STATIC);
+		sqlite3_prepare_v2(db, "SELECT * FROM file_system WHERE path = ?", -1, &stmt, 0);
+		sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_STATIC);
 		if(sqlite3_step(stmt)!= SQLITE_ROW){
 #ifdef DEBUG
-			cout << "ProcessName(): no such prefix/name found in ndnfs: " << path << endl;
+			cout << "ProcessName(): no such file/directory found in ndnfs: " << path << endl;
 #endif
 			sqlite3_finalize(stmt);
 			return -1;
@@ -159,7 +187,7 @@ int ProcessName(Ptr<Interest> interest,uint64_t &version, int &seg, string &path
 #ifdef DEBUG
 			cout << "ProcessName(): find file: " << path << endl;
 #endif
-			version = sqlite3_column_int64(stmt,7);
+			version = sqlite3_column_int64(stmt, 7);
 			seg = 0;
 			sqlite3_finalize(stmt);
 			return 1;
@@ -173,32 +201,33 @@ int ProcessName(Ptr<Interest> interest,uint64_t &version, int &seg, string &path
 	}
 }
 
-bool CompareComponent(char* a, char* b){
-	Name path1 = Name(string(a));
-	Name path2 = Name(string(b));
-	len1 = path1.size();
-	len2 = path2.size();
-	comp1 = path1.get(len1);
-	comp2 = path2.get(len2);
-	return comp1<comp2;}
+bool CompareComponent(const string& a, const string& b){
+    ndn::Name path1(a);
+    ndn::Name path2(b);
+	int len1 = path1.size();
+	int len2 = path2.size();
+    ndn::name::Component& comp1 = path1.get(len1 - 1);
+    ndn::name::Component& comp2 = path2.get(len2 - 1);
+	return comp1<comp2;
+}
 
 int MatchFile(string &path, uint64_t& version, int& seg){
 	//finding the relevant file recursively
 	sqlite3_stmt *stmt;
-	sqlite3_prepare_v2(db, "SELECT * FROM file_system WHERE parent = ?", -1 &stmt,0);
-	sqlite3_bind_text(stmt, 1, path.c_str(), SQLITE_STATIC);
-	vector <char*> paths;
+	sqlite3_prepare_v2(db, "SELECT * FROM file_system WHERE parent = ?", -1, &stmt, 0);
+	sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_STATIC);
+	vector<string> paths;
 	Name path_t;
 	while(sqlite3_step(stmt) == SQLITE_ROW){
-		paths.push_back(sqlite3_column(stmt, 0));
+		paths.push_back(string((const char *)sqlite3_column_text(stmt, 0)));
 	}
-	if(paths.capacity()!=0){
+	if(paths.size()!=0){
 		sort(paths.begin(), paths.end(), CompareComponent);
 		//can add selector here
 		path = paths[0];
 		sqlite3_finalize(stmt);
-		sqlite3_prepare_v2(db, "SELECT * FROM file_system WHERE path = ?", -1 &stmt,0);
-		sqlite3_bind_text(stmt, 1, path.c_str(), SQLITE_STATIC);
+		sqlite3_prepare_v2(db, "SELECT * FROM file_system WHERE path = ?", -1, &stmt, 0);
+		sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_STATIC);
 		if(sqlite3_step(stmt) == SQLITE_ROW){
 			int type = sqlite3_column_int(stmt,2);
 			if (type == 1){
@@ -227,28 +256,6 @@ int MatchFile(string &path, uint64_t& version, int& seg){
     return -1;
 }
 
-
-// fetch raw data as binary from the segment specified by ndnfs_name
-// number of bytes fetch stored in len
-const char* FetchData(uint64_t version, int seg, string path  int& len) {
-	sqlite3_stmt *stmt;
-	sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ? AND version = ? AND segment = ?", -1, &stmt, 0);
-    sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_STATIC);
-	sqlite3_bind_int64(stmt, 2, version);
-	sqlite3_bind_int(stmt, 3, seg);
-	if(sqlite3_step(stmt) == SQLITE_ROW){
-		char * data = (char *)sqlite3_column_blob(stmt,3)
-            len = strlen(data) + 1;
-		sqlite3_finalize(stmt);
-		return data;
-	}
-	else {
-        // query failed, no entry found
-		cerr << "FetchData(): error locating data: " << path << endl;
-		sqlite3_finalize(stmt);
-		return NULL;
-    }
-}
 
 // TODO: publisherPublicKeyDigest
 // related implementation not available currently in lib ccnx-cpp
