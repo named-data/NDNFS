@@ -15,6 +15,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *
  * Author: Wentao Shang <wentao@cs.ucla.edu>
+ *         Qiuhan Ding <dingqiuhan@gmail.com>
  */
 
 #include "file.h"
@@ -33,15 +34,15 @@ int ndnfs_open(const char *path, struct fuse_file_info *fi)
     sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
     int res = sqlite3_step(stmt);
     if (res != SQLITE_ROW) {
-	sqlite3_finalize(stmt);
-	return -ENOENT;
+        sqlite3_finalize(stmt);
+        return -ENOENT;
     }
     
     int type = sqlite3_column_int(stmt, 0);
     uint64_t tmp_ver = sqlite3_column_int64(stmt, 1);
     if (type != ndnfs::file_type) {
-	sqlite3_finalize(stmt);
-	return -EISDIR;
+        sqlite3_finalize(stmt);
+        return -EISDIR;
     }
 
     sqlite3_finalize(stmt);
@@ -51,32 +52,32 @@ int ndnfs_open(const char *path, struct fuse_file_info *fi)
     // Check open flags
     switch (fi->flags & O_ACCMODE) {
     case O_RDONLY:
-	// Nothing to be done for read only access
-	break;
+        // Nothing to be done for read only access
+        break;
     case O_WRONLY:
     case O_RDWR:
-	// Create temporary version for file editing
+        // Create temporary version for file editing
         
-	// If there is already a temp version there, it means that
-	// some one is writing to the file now. We should reject this 
-	// open request.
-	if (tmp_ver != -1) {
-	    return -EACCES;
-	}
+        // If there is already a temp version there, it means that
+        // some one is writing to the file now. We should reject this 
+        // open request.
+        if (tmp_ver != -1) {
+            return -EACCES;
+        }
 	
-	tmp_ver = generate_version();
-	sqlite3_prepare_v2(db, "UPDATE file_system SET temp_version = ? WHERE path = ?;", -1, &stmt, 0);
-	sqlite3_bind_int64(stmt, 1, tmp_ver);
-	sqlite3_bind_text(stmt, 2, path, -1, SQLITE_STATIC);
-	res = sqlite3_step(stmt);
-	sqlite3_finalize(stmt);
+        tmp_ver = generate_version();
+        sqlite3_prepare_v2(db, "UPDATE file_system SET temp_version = ? WHERE path = ?;", -1, &stmt, 0);
+        sqlite3_bind_int64(stmt, 1, tmp_ver);
+        sqlite3_bind_text(stmt, 2, path, -1, SQLITE_STATIC);
+        res = sqlite3_step(stmt);
+        sqlite3_finalize(stmt);
 
-	if (res != SQLITE_OK && res != SQLITE_DONE)
-	    return -EACCES;
+        if (res != SQLITE_OK && res != SQLITE_DONE)
+            return -EACCES;
 
-	break;
+        break;
     default:
-	break;
+        break;
     }
 
     return 0;
@@ -98,8 +99,8 @@ int ndnfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
     int res = sqlite3_step(stmt);
     if (res == SQLITE_ROW) {
         // Cannot create file that has conflicting file name
-	sqlite3_finalize(stmt);
-	return -ENOENT;
+        sqlite3_finalize(stmt);
+        return -ENOENT;
     }
     
     sqlite3_finalize(stmt);
@@ -128,8 +129,8 @@ int ndnfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
     // Add the file entry to database
     int now = time(0);
     sqlite3_prepare_v2(db, 
-		       "INSERT INTO file_system (path, parent, type, mode, atime, mtime, size, current_version, temp_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);", 
-		       -1, &stmt, 0);
+                       "INSERT INTO file_system (path, parent, type, mode, atime, mtime, size, current_version, temp_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);", 
+                       -1, &stmt, 0);
     sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
     sqlite3_bind_text(stmt, 2, dir_path.c_str(), -1, SQLITE_STATIC);
     sqlite3_bind_int(stmt, 3, ndnfs::file_type);
@@ -164,14 +165,14 @@ int ndnfs_read(const char *path, char *buf, size_t size, off_t offset, struct fu
     sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
     int res = sqlite3_step(stmt);
     if (res != SQLITE_ROW) {
-	sqlite3_finalize(stmt);
-	return -ENOENT;
+        sqlite3_finalize(stmt);
+        return -ENOENT;
     }
     
     int type = sqlite3_column_int(stmt, 0);
     uint64_t curr_ver = sqlite3_column_int64(stmt, 1);
     if (type != ndnfs::file_type) {
-	sqlite3_finalize(stmt);
+        sqlite3_finalize(stmt);
         return -EINVAL;
     }
 
@@ -192,7 +193,7 @@ int ndnfs_read(const char *path, char *buf, size_t size, off_t offset, struct fu
 int ndnfs_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
 {
 #ifdef NDNFS_DEBUG
-  cout << "ndnfs_write: path=" << path << std::dec << ", size=" << size << ", offset=" << offset << endl;
+    cout << "ndnfs_write: path=" << path << std::dec << ", size=" << size << ", offset=" << offset << endl;
 #endif
 
     sqlite3_stmt *stmt;
@@ -200,15 +201,15 @@ int ndnfs_write(const char *path, const char *buf, size_t size, off_t offset, st
     sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
     int res = sqlite3_step(stmt);
     if (res != SQLITE_ROW) {
-	sqlite3_finalize(stmt);
-	return -ENOENT;
+        sqlite3_finalize(stmt);
+        return -ENOENT;
     }
     
     int type = sqlite3_column_int(stmt, 0);
     uint64_t curr_ver = sqlite3_column_int64(stmt, 1);
     uint64_t temp_ver = sqlite3_column_int64(stmt, 2);
     if (type != ndnfs::file_type) {
-	sqlite3_finalize(stmt);
+        sqlite3_finalize(stmt);
         return -EINVAL;
     }
 
@@ -217,7 +218,7 @@ int ndnfs_write(const char *path, const char *buf, size_t size, off_t offset, st
     // Write data to a new version of the file
     int written = write_temp_version(path, curr_ver, temp_ver, buf, size, offset);
     if (written < 0) {
-	return -EINVAL;
+        return -EINVAL;
     }
 
     sqlite3_prepare_v2(db, "UPDATE file_system SET size = ?, mtime = ? WHERE path = ?;", -1, &stmt, 0);
@@ -242,15 +243,15 @@ int ndnfs_truncate(const char *path, off_t length)
     sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
     int res = sqlite3_step(stmt);
     if (res != SQLITE_ROW) {
-	sqlite3_finalize(stmt);
-	return -ENOENT;
+        sqlite3_finalize(stmt);
+        return -ENOENT;
     }
     
     int type = sqlite3_column_int(stmt, 0);
     uint64_t curr_ver = sqlite3_column_int64(stmt, 1);
     uint64_t temp_ver = sqlite3_column_int64(stmt, 2);
     if (type != ndnfs::file_type) {
-	sqlite3_finalize(stmt);
+        sqlite3_finalize(stmt);
         return -EINVAL;
     }
 
@@ -309,65 +310,65 @@ int ndnfs_release(const char *path, struct fuse_file_info *fi)
     sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
     int res = sqlite3_step(stmt);
     if (res != SQLITE_ROW) {
-	sqlite3_finalize(stmt);
-	return -ENOENT;
+        sqlite3_finalize(stmt);
+        return -ENOENT;
     }
 
     int type = sqlite3_column_int(stmt, 0);
     uint64_t curr_ver = sqlite3_column_int64(stmt, 1);
     uint64_t temp_ver = sqlite3_column_int64(stmt, 2);
     if (type != ndnfs::file_type) {
-	sqlite3_finalize(stmt);
+        sqlite3_finalize(stmt);
         return -EINVAL;
     }
 
     sqlite3_finalize(stmt);
 
-/*
-  In FUSE design, if the file is created with create() call,
-  the corresponding release() call always has fi->flags = 0.
-  So we need to check the current version number to tell if
-  the file is just created or opened in read only mode.
- */
+    /*
+      In FUSE design, if the file is created with create() call,
+      the corresponding release() call always has fi->flags = 0.
+      So we need to check the current version number to tell if
+      the file is just created or opened in read only mode.
+    */
 
     // Check open flags
     if (((fi->flags & O_ACCMODE) != O_RDONLY) || curr_ver == -1) {
         // This file is either opened with write access or just created
         if (temp_ver == -1) {
-	    return -1;
-	}
+            return -1;
+        }
 	
-	sqlite3_prepare_v2(db, "SELECT * FROM file_versions WHERE path = ? AND version = ?;", -1, &stmt, 0);
-	sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
-	sqlite3_bind_int64(stmt, 2, temp_ver);
-	int res = sqlite3_step(stmt);
+        sqlite3_prepare_v2(db, "SELECT * FROM file_versions WHERE path = ? AND version = ?;", -1, &stmt, 0);
+        sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
+        sqlite3_bind_int64(stmt, 2, temp_ver);
+        int res = sqlite3_step(stmt);
 
-	if (res != SQLITE_ROW) {
-	    // Nothing is written into this file so the temp version does not exist
-	    // In this case we simply keep the current version as it is and reset temp version number
-	    sqlite3_stmt *stmt2;
-	    sqlite3_prepare_v2(db, "UPDATE file_system SET temp_version = ? WHERE path = ?;", -1, &stmt2, 0);
-	    sqlite3_bind_int64(stmt2, 1, (uint64_t)-1);
-	    sqlite3_bind_text(stmt2, 2, path, -1, SQLITE_STATIC);
-	    sqlite3_step(stmt2);
-	    sqlite3_finalize(stmt2);
-	} else {
-	    // Update version number and remove old version
-	    int size = sqlite3_column_int(stmt, 2);
+        if (res != SQLITE_ROW) {
+            // Nothing is written into this file so the temp version does not exist
+            // In this case we simply keep the current version as it is and reset temp version number
+            sqlite3_stmt *stmt2;
+            sqlite3_prepare_v2(db, "UPDATE file_system SET temp_version = ? WHERE path = ?;", -1, &stmt2, 0);
+            sqlite3_bind_int64(stmt2, 1, (uint64_t)-1);
+            sqlite3_bind_text(stmt2, 2, path, -1, SQLITE_STATIC);
+            sqlite3_step(stmt2);
+            sqlite3_finalize(stmt2);
+        } else {
+            // Update version number and remove old version
+            int size = sqlite3_column_int(stmt, 2);
 
-	    sqlite3_stmt *stmt2;
-	    sqlite3_prepare_v2(db, "UPDATE file_system SET size = ?, current_version = ?, temp_version = ? WHERE path = ?;", -1, &stmt2, 0);
-	    sqlite3_bind_int(stmt2, 1, size);
-	    sqlite3_bind_int64(stmt2, 2, temp_ver);  // set current_version to the original temp_version
-	    sqlite3_bind_int64(stmt2, 3, (uint64_t)-1);  // set temp_version to -1
-	    sqlite3_bind_text(stmt2, 4, path, -1, SQLITE_STATIC);
-	    sqlite3_step(stmt2);
-	    sqlite3_finalize(stmt2);
+            sqlite3_stmt *stmt2;
+            sqlite3_prepare_v2(db, "UPDATE file_system SET size = ?, current_version = ?, temp_version = ? WHERE path = ?;", -1, &stmt2, 0);
+            sqlite3_bind_int(stmt2, 1, size);
+            sqlite3_bind_int64(stmt2, 2, temp_ver);  // set current_version to the original temp_version
+            sqlite3_bind_int64(stmt2, 3, (uint64_t)-1);  // set temp_version to -1
+            sqlite3_bind_text(stmt2, 4, path, -1, SQLITE_STATIC);
+            sqlite3_step(stmt2);
+            sqlite3_finalize(stmt2);
 
-	    if (curr_ver != -1)
-	        remove_version(path, curr_ver);
-	}
-	sqlite3_finalize(stmt);
+            if (curr_ver != -1)
+                remove_version(path, curr_ver);
+        }
+        sqlite3_finalize(stmt);
     }
 
     return 0;

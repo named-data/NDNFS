@@ -55,7 +55,7 @@ void ndnName2String(ndn::Name name, uint64_t &version, int &seg, string &path);
 // on failure (no match found).
 //const std::string NameSelector(ndn::Ptr<ndn::Interest> interest);
 
-int ProcessName(Ptr<Interest> interest,uint64_t &version, int &seg, string &path);
+int ProcessName(ndn::Ptr<Interest> interest,uint64_t &version, int &seg, string &path);
 // search mongo db specified by c from entry specified by cursor for 
 // possible matches. whenever finding a possible match, check if it suffices
 // the selectors.

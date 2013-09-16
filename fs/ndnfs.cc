@@ -95,8 +95,8 @@ int main(int argc, char **argv)
     fuse_opt_parse(&args, &conf, ndnfs_opts, NULL);
 
     if (conf.prefix != NULL) {
-	ndn::Name InterestBaseName(conf.prefix);
-	ndnfs::global_prefix = InterestBaseName.toUri();
+        ndn::Name InterestBaseName(conf.prefix);
+        ndnfs::global_prefix = InterestBaseName.toUri();
     }
     cout << "main: global prefix is " << ndnfs::global_prefix << endl;
 
@@ -106,7 +106,7 @@ int main(int argc, char **argv)
         cout << "main: ok" << endl;
     } else {
         cout << "main: cannot connect to sqlite db, quit" << endl;
-	sqlite3_close(db);
+        sqlite3_close(db);
         return -1;
     }
     
@@ -169,8 +169,8 @@ CREATE INDEX id_seg ON file_segments (path, version, segment);    \n\
     int now = time(0);
     sqlite3_stmt *stmt;
     sqlite3_prepare_v2(db, 
-		       "INSERT INTO file_system (path, parent, type, mode, atime, mtime, size, current_version, temp_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);", 
-		       -1, &stmt, 0);
+                       "INSERT INTO file_system (path, parent, type, mode, atime, mtime, size, current_version, temp_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);", 
+                       -1, &stmt, 0);
     sqlite3_bind_text(stmt, 1, "/", -1, SQLITE_STATIC);
     sqlite3_bind_text(stmt, 2, "", -1, SQLITE_STATIC);
     sqlite3_bind_int(stmt, 3, ndnfs::dir_type);
@@ -182,7 +182,7 @@ CREATE INDEX id_seg ON file_segments (path, version, segment);    \n\
     sqlite3_bind_int64(stmt, 9, -1);  // temp version
     int res = sqlite3_step(stmt);
     if (res == SQLITE_OK || res == SQLITE_DONE) {
-      cout << "main: OK" << endl;
+        cout << "main: OK" << endl;
     }
 
     sqlite3_finalize(stmt);

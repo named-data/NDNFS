@@ -79,13 +79,13 @@ def build (bld):
         use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD FUSE CCNX SSL NDNCXX SQLITE3',
         includes = ".",
         )
-    # bld (
-    #     target = "ndnfs-server",
-    #     features = ["cxx", "cxxprogram"],
-    #     source = bld.path.ant_glob(['server/server.cc', 'server/servermodule.cc']),
-    #     use = 'MONGODB BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD CCNX SSL NDNCXX SQLITE3',
-    #     includes = ".",
-    #     )
+    bld (
+        target = "ndnfs-server",
+        features = ["cxx", "cxxprogram"],
+        source = bld.path.ant_glob(['server/server.cc', 'server/servermodule.cc']),
+        use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD CCNX SSL NDNCXX SQLITE3',
+        includes = ".",
+        )
     # bld (
     #     target = "test-client",
     #     features = ["cxx", "cxxprogram"],

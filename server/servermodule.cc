@@ -44,26 +44,26 @@ void OnInterest(Ptr<Interest> interest) {
     cout << interest_cnt++ << "------------------------------------------" << endl;
     cout << "OnInterest(): interest name: " << interest->getName() << endl;
 #endif
-	string path;
-	uint64_t version;
-	int seg;
-	int res = ProcessName(interest, version, seg, path);
+    string path;
+    uint64_t version;
+    int seg;
+    int res = ProcessName(interest, version, seg, path);
     if (res == -1) {
 		cout << "OnInterest(): no match found for prefix: " << interest->getName() << endl;
     }
     else {
-      //#ifdef DEBUG
+        //#ifdef DEBUG
 		cout << "OnInterest(): a match has been found for prefix: " << interest->getName() << endl;
 		cout << "OnInterest(): fetching content object ..." << endl;
 
-	int len;
-	const char* data = FetchData(version,seg,path, len);
-	ndn::Blob bin_data;
-	for (int i = 0; i < len; i++) {
-	    bin_data.push_back(data[i]);
-	}
-	handler->putToCcnd(bin_data);
-	cout << "OnInterest(): content object returned and interest consumed" << endl;
+        int len;
+        const char* data = FetchData(version,seg,path, len);
+        ndn::Blob bin_data;
+        for (int i = 0; i < len; i++) {
+            bin_data.push_back(data[i]);
+        }
+        handler->putToCcnd(bin_data);
+        cout << "OnInterest(): content object returned and interest consumed" << endl;
     }
     cout << "OnInterest(): Done" << endl;
     cout << "------------------------------------------------------------" << endl;
@@ -79,7 +79,7 @@ void ndnName2String(ndn::Name name, uint64_t &version, int &seg, string &path) {
     ndn::Name::const_iterator iter = name.begin();
     for (; iter != name.end(); iter++) {
 #ifdef DEBUG
-	cout << "ndnName2String(): interest name component: " << comp << endl;
+        cout << "ndnName2String(): interest name component: " << comp << endl;
 #endif
 		const uint8_t marker = *(iter->buf());
 		// cout << (unsigned int)marker << endl;
@@ -116,9 +116,9 @@ int ProcessName(Ptr<Interest> interest,uint64_t &version, int &seg, string &path
 		sqlite3_bind_int64(stmt,2,version);
 		sqlite3_bind_int(stmt,3,seg);
 		if(sqlite3_step(stmt)!= SQLITE_ROW){
-			#ifdef DEBUG
+#ifdef DEBUG
 			cout << "ProcessName(): no such prefix/name found in ndnfs: " << path << endl;
-			#endif
+#endif
 			sqlite3_finalize(stmt);
 			return -1;
 		}
@@ -132,9 +132,9 @@ int ProcessName(Ptr<Interest> interest,uint64_t &version, int &seg, string &path
 		sqlite3_bind_int64(stmt,2,version);
 		sqlite3_bind_int(stmt,3,0);
 		if(sqlite3_step(stmt)!= SQLITE_ROW){
-			#ifdef DEBUG
+#ifdef DEBUG
 			cout << "ProcessName(): no such prefix/name found in ndnfs: " << ndn_name << endl;
-			#endif
+#endif
 			sqlite3_finalize(stmt);
 			return -1;
 		}
@@ -147,27 +147,27 @@ int ProcessName(Ptr<Interest> interest,uint64_t &version, int &seg, string &path
 		sqlite3_prepare_v2(db, "SELECT * FROM file_system WHERE path = ?", -1 &stmt,0);
 		sqlite3_bind_text(stmt, 1, path.c_str(),SQLITE_STATIC);
 		if(sqlite3_step(stmt)!= SQLITE_ROW){
-			#ifdef DEBUG
+#ifdef DEBUG
 			cout << "ProcessName(): no such prefix/name found in ndnfs: " << path << endl;
-			#endif
+#endif
 			sqlite3_finalize(stmt);
 			return -1;
 		}
 		//recursively finding path
 		int type = sqlite3_column_int(stmt,2);
 		if(type == 1){
-			#ifdef DEBUG
+#ifdef DEBUG
 			cout << "ProcessName(): find file: " << path << endl;
-			#endif
+#endif
 			version = sqlite3_column_int64(stmt,7);
 			seg = 0;
 			sqlite3_finalize(stmt);
 			return 1;
 		}
 		sqlite3_finalize(stmt);
-		#ifdef DEBUG
-			cout << "ProcessName(): recursively find file: " << path << endl;
-		#endif
+#ifdef DEBUG
+        cout << "ProcessName(): recursively find file: " << path << endl;
+#endif
 		int res = MatchFile(path, version, seg);
 		return res;
 	}
@@ -202,9 +202,9 @@ int MatchFile(string &path, uint64_t& version, int& seg){
 		if(sqlite3_step(stmt) == SQLITE_ROW){
 			int type = sqlite3_column_int(stmt,2);
 			if (type == 1){
-				#ifdef DEBUG
-					cout << "MatchFile(): find file: " << path << endl;
-				#endif
+#ifdef DEBUG
+                cout << "MatchFile(): find file: " << path << endl;
+#endif
 				version = sqlite3_column_int64(stmt,7);
 				seg = 0;
 				sqlite3_finalize(stmt);
@@ -212,19 +212,19 @@ int MatchFile(string &path, uint64_t& version, int& seg){
 			}
 			else
 				sqlite3_finalize(stmt);
-				return MatchFile(path, version, seg);
+            return MatchFile(path, version, seg);
 		}
 		else
-			#ifdef DEBUG
+#ifdef DEBUG
 			cout << "MatchFile(): no such prefix/name found in ndnfs: " << path << endl;
-			#endif
-			return -1;
+#endif
+        return -1;
 	}
 	else
-		#ifdef DEBUG
-			cout << "MatchFile(): no such file found in path: " << path << endl;
-		#endif
-		return -1;
+#ifdef DEBUG
+        cout << "MatchFile(): no such file found in path: " << path << endl;
+#endif
+    return -1;
 }
 
 
@@ -238,12 +238,12 @@ const char* FetchData(uint64_t version, int seg, string path  int& len) {
 	sqlite3_bind_int(stmt, 3, seg);
 	if(sqlite3_step(stmt) == SQLITE_ROW){
 		char * data = (char *)sqlite3_column_blob(stmt,3)
-		len = strlen(data) + 1;
+            len = strlen(data) + 1;
 		sqlite3_finalize(stmt);
 		return data;
 	}
 	else {
-	// query failed, no entry found
+        // query failed, no entry found
 		cerr << "FetchData(): error locating data: " << path << endl;
 		sqlite3_finalize(stmt);
 		return NULL;

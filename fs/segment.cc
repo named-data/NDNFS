@@ -34,7 +34,7 @@ using namespace ndn;
 int read_segment(const char* path, const uint64_t ver, const int seg, char *output, const int limit, const int offset)
 {
 #ifdef NDNFS_DEBUG
-  cout << "read_segment: path=" << path << std::dec << ", ver=" << ver << ", seg=" << seg << ", limit=" << limit << ", offset=" << offset << endl;
+    cout << "read_segment: path=" << path << std::dec << ", ver=" << ver << ", seg=" << seg << ", limit=" << limit << ", offset=" << offset << endl;
 #endif
 
     const char*co_raw;
@@ -59,7 +59,7 @@ int read_segment(const char* path, const uint64_t ver, const int seg, char *outp
 #ifdef NDNFS_DEBUG
     cout << "read_segment: raw data is " << endl;
     for (int i = 0; i < co_size; i++) {
-      cout << co_raw[i];
+        cout << co_raw[i];
     }
     cout << endl;
     cout << "read_segment: raw data length is " << co_size << endl;
@@ -67,7 +67,7 @@ int read_segment(const char* path, const uint64_t ver, const int seg, char *outp
 
     int copy_len = data->content().size();
     if (copy_len > limit)  // Don't write across the limit
-	copy_len = limit;
+        copy_len = limit;
 
 #ifdef NDNFS_DEBUG
     cout << "read_segment: content to copy is " << endl;
@@ -122,7 +122,7 @@ int make_segment(const char* path, const uint64_t ver, const int seg, const bool
 #ifdef NDNFS_DEBUG
     cout << "make_segment: raw data is" << endl;
     for (int i = 0; i < co_size; i++) {
-      cout << co_raw[i];
+        cout << co_raw[i];
     }
     cout << endl;
     cout << "make_segment: raw data length is " << co_size << endl;
@@ -144,7 +144,7 @@ int make_segment(const char* path, const uint64_t ver, const int seg, const bool
 void remove_segments(const char* path, const uint64_t ver, const int start/* = 0 */)
 {
 #ifdef NDNFS_DEBUG
-  cout << "remove_segments: path=" << path << std::dec << ", ver=" << ver << ", from segment #" << start << endl;
+    cout << "remove_segments: path=" << path << std::dec << ", ver=" << ver << ", from segment #" << start << endl;
 #endif
 
     sqlite3_stmt *stmt;
@@ -161,18 +161,18 @@ void remove_segments(const char* path, const uint64_t ver, const int start/* = 0
 
     for (int i = start; i < segs; i++) {
         sqlite3_prepare_v2(db, "DELETE FROM file_segments WHERE path = ? AND version = ? AND segment = ?;", -1, &stmt, 0);
-	sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
-	sqlite3_bind_int64(stmt, 2, ver);
-	sqlite3_bind_int(stmt, 3, i);
-	sqlite3_step(stmt);
-	sqlite3_finalize(stmt);
+        sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
+        sqlite3_bind_int64(stmt, 2, ver);
+        sqlite3_bind_int(stmt, 3, i);
+        sqlite3_step(stmt);
+        sqlite3_finalize(stmt);
     }
 }
 
 void truncate_segment(const char* path, const uint64_t ver, const int seg, const off_t length)
 {
 #ifdef NDNFS_DEBUG
-  cout << "truncate_segment: path=" << path << std::dec << ", ver=" << ver << ", seg=" << seg << ", length=" << length << endl;
+    cout << "truncate_segment: path=" << path << std::dec << ", ver=" << ver << ", seg=" << seg << ", length=" << length << endl;
 #endif
 
     sqlite3_stmt *stmt;
@@ -182,41 +182,41 @@ void truncate_segment(const char* path, const uint64_t ver, const int seg, const
     sqlite3_bind_int(stmt, 3, seg);
     if(sqlite3_step(stmt) == SQLITE_ROW) {
         if (length == 0) {
-	  sqlite3_finalize(stmt);
-	  sqlite3_prepare_v2(db, "DELETE FROM file_segments WHERE path = ? AND version = ? AND segment = ?;", -1, &stmt, 0);
-	  sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
-	  sqlite3_bind_int64(stmt, 2, ver);
-          sqlite3_bind_int(stmt, 3, seg);
-	  sqlite3_step(stmt);
-	  sqlite3_finalize(stmt);
-	} else {
-	  const char* co_raw = (const char *)sqlite3_column_blob(stmt, 3);
-	  int co_size = sqlite3_column_bytes(stmt, 3);
+            sqlite3_finalize(stmt);
+            sqlite3_prepare_v2(db, "DELETE FROM file_segments WHERE path = ? AND version = ? AND segment = ?;", -1, &stmt, 0);
+            sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
+            sqlite3_bind_int64(stmt, 2, ver);
+            sqlite3_bind_int(stmt, 3, seg);
+            sqlite3_step(stmt);
+            sqlite3_finalize(stmt);
+        } else {
+            const char* co_raw = (const char *)sqlite3_column_blob(stmt, 3);
+            int co_size = sqlite3_column_bytes(stmt, 3);
 
-	  assert(co_size > (int)length);
+            assert(co_size > (int)length);
 
-	  Ptr<Blob> data_blob = Create<Blob>(co_raw, co_size);
-	  Ptr<Data> data = Data::decodeFromWire(data_blob);
-	  const Blob& data_content = data->content();
-	  const char *content = data_content.buf();
+            Ptr<Blob> data_blob = Create<Blob>(co_raw, co_size);
+            Ptr<Data> data = Data::decodeFromWire(data_blob);
+            const Blob& data_content = data->content();
+            const char *content = data_content.buf();
 
-	  Content co(content, length);
-	  Data trunc_data;
-	  trunc_data.setName(data->getName());
-	  trunc_data.setContent(co);
-	  keychain->sign(trunc_data,signer);
-	  Ptr<Blob> wire_data = trunc_data.encodeToWire();
-	  char *trunc_co_raw = wire_data->buf();
-	  int trunc_co_size = wire_data->size();
+            Content co(content, length);
+            Data trunc_data;
+            trunc_data.setName(data->getName());
+            trunc_data.setContent(co);
+            keychain->sign(trunc_data,signer);
+            Ptr<Blob> wire_data = trunc_data.encodeToWire();
+            char *trunc_co_raw = wire_data->buf();
+            int trunc_co_size = wire_data->size();
 
-	  sqlite3_finalize(stmt);
-	  sqlite3_prepare_v2(db, "UPDATE file_segments SET data = ? WHERE path = ? AND version = ? AND segment = ?;", -1, &stmt, 0);
-	  sqlite3_bind_blob(stmt, 1, trunc_co_raw, trunc_co_size, SQLITE_STATIC);
-	  sqlite3_bind_text(stmt, 2, path, -1, SQLITE_STATIC);
-	  sqlite3_bind_int64(stmt, 3, ver);
-          sqlite3_bind_int(stmt, 4, seg);
-	  sqlite3_step(stmt);
-	  sqlite3_finalize(stmt);
-	}
+            sqlite3_finalize(stmt);
+            sqlite3_prepare_v2(db, "UPDATE file_segments SET data = ? WHERE path = ? AND version = ? AND segment = ?;", -1, &stmt, 0);
+            sqlite3_bind_blob(stmt, 1, trunc_co_raw, trunc_co_size, SQLITE_STATIC);
+            sqlite3_bind_text(stmt, 2, path, -1, SQLITE_STATIC);
+            sqlite3_bind_int64(stmt, 3, ver);
+            sqlite3_bind_int(stmt, 4, seg);
+            sqlite3_step(stmt);
+            sqlite3_finalize(stmt);
+        }
     }
 }
