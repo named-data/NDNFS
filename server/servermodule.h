@@ -31,15 +31,12 @@
 
 #define DB_ENTRY_TYPE_DIR	0
 #define DB_ENTRY_TYPE_FIL	1
-//#define DB_ENTRY_TYPE_VER	2
-//#define DB_ENTRY_TYPE_SEG	3
 
 extern const char *db_name;
 extern sqlite3 *db;
 
 // Global prefix for NDNFS
 extern std::string global_prefix;
-extern ndn::Name InterestBaseName;
 
 // callbalck on receiving incoming interest.
 // respond proper content object and comsumes the interest. or simple ignore

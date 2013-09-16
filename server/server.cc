@@ -46,7 +46,6 @@ Ptr<security::Keychain> keychain = Ptr<security::Keychain>(new security::Keychai
 Ptr<Wrapper> handler = Ptr<Wrapper>(new Wrapper(keychain));
 
 string global_prefix;
-Name InterestBaseName;
 
 void
 publishAllCert(Ptr<Wrapper> wrapper)
@@ -112,7 +111,7 @@ int main(int argc, char **argv) {
     }
 
     cout << "serving prefix: " << prefix << endl;
-    InterestBaseName = Name(prefix);
+    Name InterestBaseName(prefix);
     global_prefix = InterestBaseName.toUri();
     cout << "global prefix for NDNFS: " << global_prefix << endl;
 
