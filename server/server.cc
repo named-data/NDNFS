@@ -31,16 +31,13 @@
 #include <boost/bind.hpp>
 #include <unistd.h>
 
-
-
-
 #include "servermodule.h"
 
 using namespace std;
 using namespace ndn;
 
-const char* db_name = "ndnfs.root";
-mongo::ScopedDbConnection* c;
+const char *db_name = "/tmp/ndnfs.db";
+sqlite3 *db;
 bool child_selector_set;
 
 // create a global handler
@@ -104,15 +101,14 @@ int main(int argc, char **argv) {
     cerr << "publish KSK: " << cert1->size() << endl;
     handler->putToCcnd(*cert1);////////////
     
-    
-    c = mongo::ScopedDbConnection::getScopedDbConnection("localhost");
-    if (c->ok())
-	cout << "main(): connected to local mongo db" << endl;
-    else {
-	cerr << "main(): cannot connect to local mongo db" << endl;
-	c->done();
-	delete c;
-	exit(EXIT_FAILURE);
+    cout << "main: open sqlite database" << endl;
+
+    if (sqlite3_open(db_name, &db) == SQLITE_OK) {
+        cout << "main: ok" << endl;
+    } else {
+        cout << "main: cannot connect to sqlite db, quit" << endl;
+	sqlite3_close(db);
+        return -1;
     }
 
     cout << "serving prefix: " << prefix << endl;
@@ -126,8 +122,6 @@ int main(int argc, char **argv) {
     }
 	
     cout << "main(): ServerModule exiting ..." << endl;
-    c->done();
-    delete c;
 
     return 0;
 }

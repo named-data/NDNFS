@@ -22,18 +22,20 @@
 
 #include <string>
 
-#include <mongo/client/dbclient.h>
 #include <ndn.cxx/wrapper/wrapper.h>
 #include <ndn.cxx/common.h>
 #include <ndn.cxx/fields/name.h>
 #include <ndn.cxx/interest.h>
 
+#include <sqlite3.h>
+
 #define DB_ENTRY_TYPE_DIR	0
 #define DB_ENTRY_TYPE_FIL	1
-#define DB_ENTRY_TYPE_VER	2
-#define DB_ENTRY_TYPE_SEG	3
+//#define DB_ENTRY_TYPE_VER	2
+//#define DB_ENTRY_TYPE_SEG	3
 
-
+extern const char *db_name;
+extern sqlite3 *db;
 
 // Global prefix for NDNFS
 extern std::string global_prefix;
@@ -46,33 +48,34 @@ void OnInterest(ndn::Ptr<ndn::Interest> interest);
 
 // ndn-ndnfs name converter. converting name from ndn::Name representation to
 // string representation.
-const std::string ndnName2String(ndn::Name name);
+void ndnName2String(ndn::Name name, uint64_t &version, int &seg, string &path);
 
 // ndn name selector. deriving NDNFS name that specifies a content object from
 // the NDN name given in an interest. return the NDNFS name on success; NULL 
 // on failure (no match found).
-const std::string NameSelector(ndn::Ptr<ndn::Interest> interest);
+//const std::string NameSelector(ndn::Ptr<ndn::Interest> interest);
 
+int ProcessName(Ptr<Interest> interest,uint64_t &version, int &seg, string &path);
 // search mongo db specified by c from entry specified by cursor for 
 // possible matches. whenever finding a possible match, check if it suffices
 // the selectors.
-const std::string 
+/*const std::string 
 Search4PossibleMatch_Rec(
 		mongo::ScopedDbConnection* c, 
 		mongo::BSONObj current_entry, 
-		ndn::Ptr<ndn::Interest> interest);
+		ndn::Ptr<ndn::Interest> interest);*/
 
 // check if the directory/content object specified by cursor suffices 
 // the min/max suffix components selector specified in interest. 
 // note that if and only if cursor points to a segment entry can a match be 
 // found. skip checking if cursor points to some other type entry.
-bool CheckSuffix(mongo::BSONObj current_entry, ndn::Ptr<ndn::Interest> interest);
-
+//bool CheckSuffix(mongo::BSONObj current_entry, ndn::Ptr<ndn::Interest> interest);
+bool CompareComponent(char* a, char* b);
 // fetch raw data as binary from the segment specified by ndnfs_name
 // number of bytes fetch stored in len
-const char* FetchData(std::string ndnfs_name, int& len);
+const char* FetchData(uint64_t version, int seg, string path  int& len);
 
 // fetch data as string from the segment specified by ndnfs_name
-std::string FetchStringData(std::string ndnfs_name, int& len);
+std::string FetchData(uint64_t version, int seg, string path  int& len);
 	
 #endif // __SERVER_MODULE_H__

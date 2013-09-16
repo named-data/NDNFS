@@ -22,7 +22,6 @@
 #include <string>
 #include <vector>
 
-#include <mongo/client/dbclient.h>
 #include <boost/lexical_cast.hpp>
 
 #include "servermodule.h"
@@ -34,360 +33,221 @@ using namespace ndn;
 using namespace boost;
 
 extern Ptr<Wrapper> handler;
-extern char* db_name;
-extern mongo::ScopedDbConnection* c;
 extern bool child_selector_set;
 
 // callbalck on receiving incoming interest.
 // respond proper content object and comsumes the interest. or simple ignore
 // the interest if no content object found.
 void OnInterest(Ptr<Interest> interest) {
-    // 1.convert ndn name requested by interest to specific content object 
-    // name that can be fetched in NDNFS. this may be done by following the
-    // selector rules.
-    // 2.call NDNFS API to fetch content object
-    // 3.publish content object and consume the interest
     static int interest_cnt = 0;
 #ifdef DEBUG
     cout << interest_cnt++ << "------------------------------------------" << endl;
     cout << "OnInterest(): interest name: " << interest->getName() << endl;
 #endif
-    const string ndnfs_name = NameSelector(interest);
-
-    if (ndnfs_name.empty()) {
-	cout << "OnInterest(): no match found for prefix: " << interest->getName() << endl;
+	string path;
+	uint64_t version;
+	int seg;
+	int res = ProcessName(interest, version, seg, path);
+    if (res == -1) {
+		cout << "OnInterest(): no match found for prefix: " << interest->getName() << endl;
     }
     else {
       //#ifdef DEBUG
-	cout << "OnInterest(): a match has been found for prefix: " << interest->getName() << endl;
-	cout << "OnInterest(): fetching content object ..." << endl;
-	//#endif
-	// fetch the content object from mongo db
+		cout << "OnInterest(): a match has been found for prefix: " << interest->getName() << endl;
+		cout << "OnInterest(): fetching content object ..." << endl;
+
 	int len;
-	// use this part to fecth data as binary
-	const char* data = FetchData(ndnfs_name, len);
+	const char* data = FetchData(version,seg,path, len);
 	ndn::Blob bin_data;
 	for (int i = 0; i < len; i++) {
 	    bin_data.push_back(data[i]);
 	}
-	// handler.publishData(interest->getName(), data, len);
 	handler->putToCcnd(bin_data);
-	/**********************************************
-	 // test example: string data
-		string string_data = FetchStringData(ndnfs_name, len);
-		cout << "OnInterest(): string data: " << string_data << endl;
-		// TODO: seems that client receives nothing ...
-		handler.publishData(interest->getName(), string_data.c_str(), len);
-	***********************************************/
-	//#ifdef DEBUG
 	cout << "OnInterest(): content object returned and interest consumed" << endl;
-	//#endif
     }
-    //#ifdef DEBUG
     cout << "OnInterest(): Done" << endl;
     cout << "------------------------------------------------------------" << endl;
-    //#endif
 }
 
 // ndn-ndnfs name converter. converting name from ndn::Name representation to
 // string representation.
-const string ndnName2String(ndn::Name name) {
-    string str_name("");
+void ndnName2String(ndn::Name name, uint64_t &version, int &seg, string &path) {
+    path = "";
     string slash("/");
-
+    version = -1;
+    seg = -1;
     ndn::Name::const_iterator iter = name.begin();
     for (; iter != name.end(); iter++) {
-	string comp = iter->toUri ();
 #ifdef DEBUG
 	cout << "ndnName2String(): interest name component: " << comp << endl;
 #endif
-	const uint8_t marker = *(iter->buf());
-	// cout << (unsigned int)marker << endl;
-	if (marker == 0xFD) {
-	    ostringstream os;
-	    try {
-		os << iter->toVersion(); 
-	    }
-	    catch (boost::exception &e)
-	    {
-		std::cerr << boost::diagnostic_information (e) << std::endl;
-	    }
-	    comp = os.str();
-	} else if (marker == 0x00) {
-	    ostringstream os;
-	    os << iter->toSeqNum();
-	    comp = os.str();
+		const uint8_t marker = *(iter->buf());
+		// cout << (unsigned int)marker << endl;
+		if (marker == 0xFD) {
+			version = iter->toVersion(); 
+		} 
+		else if (marker == 0x00) {
+			seg = iter->toSeqNum();
+		}
+		else {
+			comp = iter->toUri();
+			path += (slash + comp);
+		}
+	
+    }
+#ifdef DEBUG
+    cout << "ndnName2String(): interest name: " << path << endl;
+#endif
+    path = path.substr(global_prefix.length());
+    if (path == "")
+		path = string("/");
+#ifdef DEBUG
+    cout << "ndnName2String(): file path after trimming: " << path << endl;
+#endif
+}
+
+
+int ProcessName(Ptr<Interest> interest,uint64_t &version, int &seg, string &path){
+	ndnName2String(interest->getName(),version,seg,path);
+	if(version>0 && seg>0){
+		sqlite3_stmt *stmt;
+		sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ? AND version = ? AND segment = ?", -1 &stmt,0);
+		sqlite3_bind_text(stmt, 1, path.c_str(),SQLITE_STATIC);
+		sqlite3_bind_int64(stmt,2,version);
+		sqlite3_bind_int(stmt,3,seg);
+		if(sqlite3_step(stmt)!= SQLITE_ROW){
+			#ifdef DEBUG
+			cout << "ProcessName(): no such prefix/name found in ndnfs: " << path << endl;
+			#endif
+			sqlite3_finalize(stmt);
+			return -1;
+		}
+		sqlite3_finalize(stmt);
+		return 1;
 	}
-	str_name += (slash + comp);
-    }
-#ifdef DEBUG
-    cout << "ndnName2String(): interest name: " << str_name << endl;
-#endif
-    str_name = str_name.substr(global_prefix.length());
-    if (str_name == "")
-	str_name = string("/");
-#ifdef DEBUG
-    cout << "ndnName2String(): file path after trimming: " << str_name << endl;
-#endif
-    return str_name;
+	else if(version>0){
+		sqlite3_stmt *stmt;
+		sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ? AND version = ? AND segment = ?", -1 &stmt,0);
+		sqlite3_bind_text(stmt, 1, path.c_str(),SQLITE_STATIC);
+		sqlite3_bind_int64(stmt,2,version);
+		sqlite3_bind_int(stmt,3,0);
+		if(sqlite3_step(stmt)!= SQLITE_ROW){
+			#ifdef DEBUG
+			cout << "ProcessName(): no such prefix/name found in ndnfs: " << ndn_name << endl;
+			#endif
+			sqlite3_finalize(stmt);
+			return -1;
+		}
+		seg = 0;
+		sqlite3_finalize(stmt);
+		return 1;
+	}
+	else{
+		sqlite3_stmt *stmt;
+		sqlite3_prepare_v2(db, "SELECT * FROM file_system WHERE path = ?", -1 &stmt,0);
+		sqlite3_bind_text(stmt, 1, path.c_str(),SQLITE_STATIC);
+		if(sqlite3_step(stmt)!= SQLITE_ROW){
+			#ifdef DEBUG
+			cout << "ProcessName(): no such prefix/name found in ndnfs: " << path << endl;
+			#endif
+			sqlite3_finalize(stmt);
+			return -1;
+		}
+		//recursively finding path
+		int type = sqlite3_column_int(stmt,2);
+		if(type == 1){
+			#ifdef DEBUG
+			cout << "ProcessName(): find file: " << path << endl;
+			#endif
+			version = sqlite3_column_int64(stmt,7);
+			seg = 0;
+			sqlite3_finalize(stmt);
+			return 1;
+		}
+		sqlite3_finalize(stmt);
+		#ifdef DEBUG
+			cout << "ProcessName(): recursively find file: " << path << endl;
+		#endif
+		int res = MatchFile(path, version, seg);
+		return res;
+	}
 }
 
-// ndn name selector. deriving NDNFS name that specifies a content object from
-// the NDN name given in an interest. return the NDNFS name on success; NULL 
-// oin failure (no match found).
-// this function looks up the underlying NDNFS directly searching for proper 
-// content object name that matches what the interest requires.
-const string NameSelector(Ptr<Interest> interest) {
-    string ndn_name("");
-    ndn_name = ndnName2String(interest->getName());
-  
-    string ndnfs_name("");
-    // derive ndnfs name from above string style ndn_name
-    // connect to db and mount the directory represented by ndn_name
-    auto_ptr<mongo::DBClientCursor> cursor = 
-	c->conn().query(db_name, QUERY("_id" << ndn_name));
-    if (!cursor->more()) {
-	// query failed, no entry found
-#ifdef DEBUG
-	cout << "NameSelector(): no such prefix/name found in ndnfs: " << ndn_name << endl;
-#endif
-	return string("");
-    }
+bool CompareComponent(char* a, char* b){
+	Name path1 = Name(string(a));
+	Name path2 = Name(string(b));
+	len1 = path1.size();
+	len2 = path2.size();
+	comp1 = path1.get(len1);
+	comp2 = path2.get(len2);
+	return comp1<comp2;}
 
-    mongo::BSONObj entry = cursor->next();
-    // search for a match in db specified by c starting from entry 
-    // specified by cursor.
-#ifdef DEBUG
-    cout << "NameSelector(): searching for: " << ndn_name << endl;
-#endif
-    child_selector_set = false;
-    ndnfs_name = Search4PossibleMatch_Rec(c, entry, interest);
-
-    if (ndnfs_name.empty()) {
-#ifdef DEBUG
-	cout << "NameSelector(): no match found for: " << ndn_name << endl;
-#endif
-    }
-    return ndnfs_name;
-}
-
-struct BSONElementLessThan {
-    inline bool operator()(const mongo::BSONElement a, const mongo::BSONElement b) {
-	if (a.type() == mongo::NumberInt)
-	    return (a.Int() < b.Int());
-	else if (a.type() == mongo::String) {
-	    if (a.String().length() < b.String().length())
-		return true;
-	    else if (a.String().length() == b.String().length())
-		return (a.String() < b.String());
-	    else 
-		return false;
+int MatchFile(string &path, uint64_t& version, int& seg){
+	//finding the relevant file recursively
+	sqlite3_stmt *stmt;
+	sqlite3_prepare_v2(db, "SELECT * FROM file_system WHERE parent = ?", -1 &stmt,0);
+	sqlite3_bind_text(stmt, 1, path.c_str(), SQLITE_STATIC);
+	vector <char*> paths;
+	Name path_t;
+	while(sqlite3_step(stmt) == SQLITE_ROW){
+		paths.push_back(sqlite3_column(stmt, 0));
+	}
+	if(paths.capacity()!=0){
+		sort(paths.begin(), paths.end(), CompareComponent);
+		//can add selector here
+		path = paths[0];
+		sqlite3_finalize(stmt);
+		sqlite3_prepare_v2(db, "SELECT * FROM file_system WHERE path = ?", -1 &stmt,0);
+		sqlite3_bind_text(stmt, 1, path.c_str(), SQLITE_STATIC);
+		if(sqlite3_step(stmt) == SQLITE_ROW){
+			int type = sqlite3_column_int(stmt,2);
+			if (type == 1){
+				#ifdef DEBUG
+					cout << "MatchFile(): find file: " << path << endl;
+				#endif
+				version = sqlite3_column_int64(stmt,7);
+				seg = 0;
+				sqlite3_finalize(stmt);
+				return 1;
+			}
+			else
+				sqlite3_finalize(stmt);
+				return MatchFile(path, version, seg);
+		}
+		else
+			#ifdef DEBUG
+			cout << "MatchFile(): no such prefix/name found in ndnfs: " << path << endl;
+			#endif
+			return -1;
 	}
 	else
-	    cerr << "BSONElementLessThan(): unsupported BSONElement type" << endl;
-	return false;
-    }
-};
-
-// search mongo db specified by c from entry specified by cursor for 
-// possible matches. whenever finding a possible match, check if it suffices
-// the selectors.
-const string Search4PossibleMatch_Rec(mongo::ScopedDbConnection* c, 
-				      mongo::BSONObj current_entry, 
-				      Ptr<Interest> interest) {
-    string original_name(current_entry.getStringField("_id"));
-    // ASSERT: for each _id specified as absolute path, there is only 1 entry
-    // check current entry. if it is a possible match, check for 
-    // selectors also to see if it can be returned.
-    // now check_selectors() can be called directly to check current entry.
-
-#ifdef DEBUG
-    cout << "Search4PossibleMatch_Rec(): now searching: " << original_name << endl;
-#endif
-    mongo::BSONObj next_entry;
-    vector<mongo::BSONElement> subdir_list;
-    // traverse this entire directory recursively
-    assert(current_entry.hasField("type"));
-    int type = current_entry.getIntField("type"); // error calling Int()
-    int first_index = 0;
-    int last_index = 0;
-    int current_index;
-    string current_name("");
-    uint8_t child_selector;
-    string ndnfs_name("");
-    auto_ptr<mongo::DBClientCursor> current_cursor;
-    switch (type) {
-    case DB_ENTRY_TYPE_DIR:
-    case DB_ENTRY_TYPE_VER:
-	subdir_list = current_entry["data"].Array();
-	// do sort here
-	sort(subdir_list.begin(), subdir_list.end(), BSONElementLessThan());
-	// childeselector check. use global variable child_selector_set to 
-	// guarantee that the selector is applied to first level name after
-	// prefix only
-	// TODO: canonical ccnx ordering???
-	first_index = 0;
-	last_index = subdir_list.size();
-	// TODO: the following function returns nothing and the child 
-	// selector switch() always goes to CHILD_LEFT
-	child_selector = interest->getChildSelector();
-	if (!child_selector_set && child_selector) {
-#ifdef DEBUG
-	    cout << "Search4PossibleMatch_Rec(): checking ChildSelector" << child_selector << endl;
-#endif
-	    child_selector_set = true;
-	    switch (child_selector) {
-	    case ndn::Interest::CHILD_LEFT:	// CHILD_LEFT
-		first_index = 0;
-		last_index = 1;
-		break;
-	    case ndn::Interest::CHILD_RIGHT:	// CHILD_RIGHT
-		first_index = subdir_list.size() - 1;
-		last_index = subdir_list.size();
-		break;
-	    case ndn::Interest::CHILD_DEFAULT:	// CHILD_DEFAULT
-		first_index = 0;
-		last_index = subdir_list.size();
-		break;
-	    default:
-		cerr << "Search4PossibleMatch_Rec(): unidentified child selector" << endl;
-		cerr << "Search4PossibleMatch_Rec(): use default settings" << endl;
-		first_index = 0;
-		last_index = subdir_list.size();
-	    }
-	}
-	for (current_index = first_index; 
-	     current_index < last_index; 
-	     current_index++) {
-	    current_name = original_name;
-	    if (current_name[current_name.length()-1] != '/')
-		current_name += "/";
-	    if (type == DB_ENTRY_TYPE_DIR)
-		current_name += subdir_list[current_index].String();
-	    else 
-		current_name += 
-		    boost::lexical_cast<string>(subdir_list[current_index].Int());
-				
-	    current_cursor = 
-		c->conn().query(db_name, QUERY("_id" << current_name));
-	    if (current_cursor->more()) {
-		next_entry = current_cursor->next();
-		ndnfs_name = 
-		    Search4PossibleMatch_Rec(c, next_entry, interest);//////////////////
-		if (!ndnfs_name.empty()) return ndnfs_name;
-	    }
-	}
-	break;
-    case DB_ENTRY_TYPE_FIL:
-	current_name = original_name;
-	if (current_name[current_name.length()-1] != '/')
-	    current_name += "/";
-	current_name += 
-	    boost::lexical_cast<string>(current_entry["data"].Long());
-		
-	current_cursor = 
-	    c->conn().query(db_name, QUERY("_id" << current_name));
-	if (current_cursor->more()) {
-	    next_entry = current_cursor->next();
-	    ndnfs_name = 
-		Search4PossibleMatch_Rec(c, next_entry, interest);
-	    if (!ndnfs_name.empty()) return ndnfs_name;
-	}
-	break;
-			
-    case DB_ENTRY_TYPE_SEG:
-	if (CheckSuffix(current_entry, interest)) {
-	    ndnfs_name = current_entry.getStringField("_id");
-#ifdef DEBUG
-	    cout << "Search4PossibleMatch_Rec(): find a match: " << ndnfs_name << endl;
-#endif
-	    return ndnfs_name;
-	}
-	break;
-    default: 
-	cerr << "Search4PossibleMatch_Rec(): unidentified entry type: " << current_entry.getIntField("type") << endl;
-    }
-		
-    return ndnfs_name;
+		#ifdef DEBUG
+			cout << "MatchFile(): no such file found in path: " << path << endl;
+		#endif
+		return -1;
 }
 
-// check if the directory/content object specified by cursor suffices 
-// selectors specified by interest. note if and only if cursor points to 
-// a segment entry can a match be found. skip checking if cursor points to 
-// some other type entry.
-bool CheckSuffix(mongo::BSONObj current_entry, Ptr<Interest> interest) {
-    assert(current_entry.hasField("type"));
-#ifdef DEBUG
-    cout << "CheckSuffix(): checking min/maxSuffixComponents" << endl;
-#endif
-    int entry_type = current_entry.getIntField("type");
-
-    // we only check segment entries to see if it suffices the selectors
-    // cout << "CheckSelectors(): checking assertion: is segment type" << endl;
-    assert(entry_type == DB_ENTRY_TYPE_SEG);
-
-    // min/max suffix components
-    uint32_t min_suffix_components = interest->getMinSuffixComponents();
-    uint32_t max_suffix_components = interest->getMaxSuffixComponents();
-#ifdef DEBUG
-    cout << "CheckSuffix(): MinSuffixComponents set to: " << min_suffix_components << endl;
-    cout << "CheckSuffix(): MaxSuffixComponents set to: " << max_suffix_components << endl;
-#endif
-
-    // do suffix components check
-    uint32_t prefix_len = interest->getName().size();
-    string match = global_prefix + current_entry.getStringField("_id");
-    uint32_t match_len = ndn::Name(match).size();
-    // digest considered one component implicitly
-    uint32_t suffix_len = match_len - prefix_len + 1;
-    if (max_suffix_components != ndn::Interest::ncomps &&
-	suffix_len > max_suffix_components) {
-#ifdef DEBUG
-	cout << "CheckSuffix(): max suffix mismatch" << endl;
-#endif
-	return false;
-    }
-    if (min_suffix_components != ndn::Interest::ncomps &&
-	suffix_len < min_suffix_components) {
-#ifdef DEBUG
-	cout << "CheckSuffix(): min suffix mismatch" << endl;
-#endif
-	return false;
-    }
-
-    return true;
-}
 
 // fetch raw data as binary from the segment specified by ndnfs_name
 // number of bytes fetch stored in len
-const char* FetchData(string ndnfs_name, int& len) {
-    auto_ptr<mongo::DBClientCursor> cursor = 
-	c->conn().query(db_name, QUERY("_id" << ndnfs_name));
-    if (!cursor->more()) {
+const char* FetchData(uint64_t version, int seg, string path  int& len) {
+	sqlite3_stmt *stmt;
+	sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ? AND version = ? AND segment = ?", -1, &stmt, 0);
+    sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_STATIC);
+	sqlite3_bind_int64(stmt, 2, version);
+	sqlite3_bind_int(stmt, 3, seg);
+	if(sqlite3_step(stmt) == SQLITE_ROW){
+		char * data = (char *)sqlite3_column_blob(stmt,3)
+		len = strlen(data) + 1;
+		sqlite3_finalize(stmt);
+		return data;
+	}
+	else {
 	// query failed, no entry found
-	cerr << "FetchData(): error locating data: " << ndnfs_name << endl;
-	return NULL;
+		cerr << "FetchData(): error locating data: " << path << endl;
+		sqlite3_finalize(stmt);
+		return NULL;
     }
-
-    mongo::BSONObj entry = cursor->next();
-    assert(entry.getIntField("type") == DB_ENTRY_TYPE_SEG);
-    return entry.getField("data").binData(len);
-}
-
-// fetch data as string from the segment specified by ndnfs_name
-string FetchStringData(string ndnfs_name, int& len) {
-    auto_ptr<mongo::DBClientCursor> cursor = 
-	c->conn().query(db_name, QUERY("_id" << ndnfs_name));
-    if (!cursor->more()) {
-	// query failed, no entry found
-	cerr << "FetchStringData(): error locating data: " << ndnfs_name << endl;
-	return NULL;
-    }
-
-    mongo::BSONObj entry = cursor->next();
-    assert(entry.getIntField("type") == DB_ENTRY_TYPE_SEG);
-    len = strlen(entry.getStringField("data")) + 1; // count tail NULL in
-    return entry.getStringField("data");
 }
 
 // TODO: publisherPublicKeyDigest
