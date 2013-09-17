@@ -62,5 +62,6 @@ int MatchFile(std::string &path, uint64_t& version, int& seg);
 // note that if and only if cursor points to a segment entry can a match be 
 // found. skip checking if cursor points to some other type entry.
 bool CompareComponent(const std::string& a, const std::string& b);
-	
+
+bool CheckSuffix(ndn::Ptr<ndn::Interest> interest, std::string path);
 #endif // __SERVER_MODULE_H__

@@ -57,38 +57,41 @@ void OnInterest(Ptr<Interest> interest) {
 		cout << "OnInterest(): no match found for prefix: " << interest->getName() << endl;
     }
     else {
-		cout << "OnInterest(): a match has been found for prefix: " << interest->getName() << endl;
-		cout << "OnInterest(): fetching content object from database" << endl;
+        bool suffix = CheckSuffix(interest, path);
+        if(suffix == true){
+            cout << "OnInterest(): a match has been found for prefix: " << interest->getName() << endl;
+            cout << "OnInterest(): fetching content object from database" << endl;
 
-        int len = -1;
-        const char* data = NULL;
-        sqlite3_stmt *stmt;
-        sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ? AND version = ? AND segment = ?", -1, &stmt, 0);
-        sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_int64(stmt, 2, version);
-        sqlite3_bind_int(stmt, 3, seg);
-        if(sqlite3_step(stmt) == SQLITE_ROW){
-            const char * data = (const char *)sqlite3_column_blob(stmt, 3);
-            len = sqlite3_column_bytes(stmt, 3);
+            int len = -1;
+            const char* data = NULL;
+            sqlite3_stmt *stmt;
+            sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ? AND version = ? AND segment = ?", -1, &stmt, 0);
+            sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_STATIC);
+            sqlite3_bind_int64(stmt, 2, version);
+            sqlite3_bind_int(stmt, 3, seg);
+            if(sqlite3_step(stmt) == SQLITE_ROW){
+                const char * data = (const char *)sqlite3_column_blob(stmt, 3);
+                len = sqlite3_column_bytes(stmt, 3);
 #ifdef DEBUG
-            cout << "OnInterest(): blob length=" << len << endl;
-            cout << "OnInterest(): blob data is " << endl;
-            ofstream ofs("/tmp/blob", ios_base::binary);
-            for (int i = 0; i < len; i++) {
-                printf("%02x", (unsigned char)data[i]);
-                ofs << data[i];
-            }
-            cout << endl;
+                cout << "OnInterest(): blob length=" << len << endl;
+                cout << "OnInterest(): blob data is " << endl;
+                ofstream ofs("/tmp/blob", ios_base::binary);
+                for (int i = 0; i < len; i++) {
+                    printf("%02x", (unsigned char)data[i]);
+                    ofs << data[i];
+                }
+                cout << endl;
 #endif
-            ndn::Blob bin_data(data, len);
-            handler->putToCcnd(bin_data);
-            cout << "OnInterest(): content object returned and interest consumed" << endl;
-        }
-        else {
+                ndn::Blob bin_data(data, len);
+                handler->putToCcnd(bin_data);
+                cout << "OnInterest(): content object returned and interest consumed" << endl;
+            }
+            else {
             // query failed, no entry found
-            cerr << "FetchData(): error locating data: " << path << endl;
-        }
-        sqlite3_finalize(stmt);
+                cerr << "OnInterest(): error locating data: " << path << endl;
+            }
+            sqlite3_finalize(stmt);
+	}
     }
     cout << "OnInterest(): Done" << endl;
     cout << "------------------------------------------------------------" << endl;
@@ -137,6 +140,8 @@ int ProcessName(Ptr<Interest> interest, uint64_t &version, int &seg, string &pat
 #ifdef DEBUG
     cout << "ProcessName(): version=" << (int64_t)version << ", segment=" << seg << ", path=" << path << endl;
 #endif
+	child_selector = interest->getChildSelector();
+	child_selector_set = false;
 	if(version != -1 && seg != -1){
 		sqlite3_stmt *stmt;
 		sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ? AND version = ? AND segment = ?", -1, &stmt, 0);
@@ -196,7 +201,7 @@ int ProcessName(Ptr<Interest> interest, uint64_t &version, int &seg, string &pat
 #ifdef DEBUG
         cout << "ProcessName(): recursively find file: " << path << endl;
 #endif
-		int res = MatchFile(path, version, seg);
+		int res = MatchFile(path, version, seg, child_selector);
 		return res;
 	}
 }
@@ -211,7 +216,7 @@ bool CompareComponent(const string& a, const string& b){
 	return comp1<comp2;
 }
 
-int MatchFile(string &path, uint64_t& version, int& seg){
+int MatchFile(string &path, uint64_t& version, int& seg, uint8_t child_selector){
 	//finding the relevant file recursively
 	sqlite3_stmt *stmt;
 	sqlite3_prepare_v2(db, "SELECT * FROM file_system WHERE parent = ?", -1, &stmt, 0);
@@ -224,7 +229,13 @@ int MatchFile(string &path, uint64_t& version, int& seg){
 	if(paths.size()!=0){
 		sort(paths.begin(), paths.end(), CompareComponent);
 		//can add selector here
-		path = paths[0];
+		if(!child_selector_set && child_selector){
+			if(child_selector == Interest::CHILD_RIGHT)
+				path = paths[paths.size()-1];
+			else
+				path = paths[0];
+			child_selector_set = false;
+		}
 		sqlite3_finalize(stmt);
 		sqlite3_prepare_v2(db, "SELECT * FROM file_system WHERE path = ?", -1, &stmt, 0);
 		sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_STATIC);
@@ -256,6 +267,41 @@ int MatchFile(string &path, uint64_t& version, int& seg){
     return -1;
 }
 
+bool CheckSuffix(Ptr<Interest> interest, string path) {
+#ifdef DEBUG
+    cout << "CheckSuffix(): checking min/maxSuffixComponents" << endl;
+#endif
+    // min/max suffix components
+    uint32_t min_suffix_components = interest->getMinSuffixComponents();
+    uint32_t max_suffix_components = interest->getMaxSuffixComponents();
+#ifdef DEBUG
+    cout << "CheckSuffix(): MinSuffixComponents set to: " << min_suffix_components << endl;
+    cout << "CheckSuffix(): MaxSuffixComponents set to: " << max_suffix_components << endl;
+#endif
+
+    // do suffix components check
+    uint32_t prefix_len = interest->getName().size();
+    string match = global_prefix + path;
+    uint32_t match_len = ndn::Name(match).size() + 2;
+    // digest considered one component implicitly
+    uint32_t suffix_len = match_len - prefix_len + 1;
+    if (max_suffix_components != ndn::Interest::ncomps &&
+	suffix_len > max_suffix_components) {
+#ifdef DEBUG
+	cout << "CheckSuffix(): max suffix mismatch" << endl;
+#endif
+	return false;
+    }
+    if (min_suffix_components != ndn::Interest::ncomps &&
+	suffix_len < min_suffix_components) {
+#ifdef DEBUG
+	cout << "CheckSuffix(): min suffix mismatch" << endl;
+#endif
+	return false;
+    }
+
+    return true;
+}
 
 // TODO: publisherPublicKeyDigest
 // related implementation not available currently in lib ccnx-cpp
