@@ -44,13 +44,13 @@ int ndnfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t off
     sqlite3_prepare_v2(db, "SELECT * FROM file_system WHERE parent = ?;", -1, &stmt, 0);
     sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
     while (sqlite3_step(stmt) == SQLITE_ROW) {
-      string path((const char *)sqlite3_column_text(stmt, 0));
-	size_t last_comp_pos = path.rfind('/');
-	if (last_comp_pos == std::string::npos)
-	    continue;
-    
-	string name = path.substr(last_comp_pos + 1);
-	filler(buf, name.c_str(), NULL, 0);
+        string path((const char *)sqlite3_column_text(stmt, 0));
+        size_t last_comp_pos = path.rfind('/');
+        if (last_comp_pos == std::string::npos)
+            continue;
+        
+        string name = path.substr(last_comp_pos + 1);
+        filler(buf, name.c_str(), NULL, 0);
     }
 
     sqlite3_finalize(stmt);
@@ -80,7 +80,7 @@ int ndnfs_mkdir(const char *path, mode_t mode)
     
     // Add new file entry with empty content
     int now = time(0);
-    sqlite3_prepare_v2(db, "INSERT INTO file_system (path, parent, type, mode, atime, mtime, size, current_ver, temp_ver) VALUE (?, ?, ?, ?, ?, ?, ?, ?);", -1, &stmt, 0);
+    sqlite3_prepare_v2(db, "INSERT INTO file_system (path, parent, type, mode, atime, mtime, size, current_version, temp_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);", -1, &stmt, 0);
     sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
     sqlite3_bind_text(stmt, 2, dir_path.c_str(), -1, SQLITE_STATIC);
     sqlite3_bind_int(stmt, 3, ndnfs::dir_type);
@@ -88,15 +88,14 @@ int ndnfs_mkdir(const char *path, mode_t mode)
     sqlite3_bind_int(stmt, 5, now);
     sqlite3_bind_int(stmt, 6, now);
     sqlite3_bind_int(stmt, 7, -1);  // size
-    sqlite3_bind_int(stmt, 8, -1);
-    sqlite3_bind_int(stmt, 9, -1);
+    sqlite3_bind_int64(stmt, 8, -1); // current_ver
+    sqlite3_bind_int64(stmt, 9, -1); // temp_ver
     res = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
-
-    if (res == SQLITE_OK)
-	return 0;
+    if (res == SQLITE_OK || res == SQLITE_DONE)
+        return 0;
     else
-	return -EACCES;
+        return -EACCES;
 }
 
 
