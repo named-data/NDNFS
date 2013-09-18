@@ -26,6 +26,7 @@
 #include <ndn.cxx/common.h>
 #include <ndn.cxx/fields/name.h>
 #include <ndn.cxx/interest.h>
+#include "dir.pb.h"
 
 #include <sqlite3.h>
 
@@ -34,6 +35,9 @@
 
 extern const char *db_name;
 extern sqlite3 *db;
+extern ndn::Ptr<ndn::security::OSXPrivatekeyStore> privateStoragePtr;
+extern ndn::Ptr<ndn::security::Keychain> keychain;
+extern ndn::Name signer;
 
 // Global prefix for NDNFS
 extern std::string global_prefix;
@@ -55,13 +59,11 @@ int ProcessName(ndn::Ptr<ndn::Interest> interest, uint64_t &version, int &seg, s
 // search mongo db specified by c from entry specified by cursor for 
 // possible matches. whenever finding a possible match, check if it suffices
 // the selectors.
-int MatchFile(std::string &path, uint64_t& version, int& seg);
-
+void SendDir(Ptr<Interest> interest, string &path, int mtime);
 // check if the directory/content object specified by cursor suffices 
 // the min/max suffix components selector specified in interest. 
 // note that if and only if cursor points to a segment entry can a match be 
 // found. skip checking if cursor points to some other type entry.
-bool CompareComponent(const std::string& a, const std::string& b);
+//bool CompareComponent(const std::string& a, const std::string& b);
 
-bool CheckSuffix(ndn::Ptr<ndn::Interest> interest, std::string path);
 #endif // __SERVER_MODULE_H__

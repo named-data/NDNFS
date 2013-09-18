@@ -35,7 +35,6 @@ using namespace ndn;
 using namespace boost;
 
 extern Ptr<Wrapper> handler;
-extern bool child_selector_set;
 
 // callbalck on receiving incoming interest.
 // respond proper content object and comsumes the interest. or simple ignore
@@ -56,43 +55,43 @@ void OnInterest(Ptr<Interest> interest) {
     if (res == -1) {
 		cout << "OnInterest(): no match found for prefix: " << interest->getName() << endl;
     }
-    else {
-        bool suffix = CheckSuffix(interest, path);
-        if(suffix == true){
-            cout << "OnInterest(): a match has been found for prefix: " << interest->getName() << endl;
-            cout << "OnInterest(): fetching content object from database" << endl;
-
-            int len = -1;
-            const char* data = NULL;
-            sqlite3_stmt *stmt;
-            sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ? AND version = ? AND segment = ?", -1, &stmt, 0);
-            sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_STATIC);
-            sqlite3_bind_int64(stmt, 2, version);
-            sqlite3_bind_int(stmt, 3, seg);
-            if(sqlite3_step(stmt) == SQLITE_ROW){
-                const char * data = (const char *)sqlite3_column_blob(stmt, 3);
-                len = sqlite3_column_bytes(stmt, 3);
-#ifdef DEBUG
-                cout << "OnInterest(): blob length=" << len << endl;
-                cout << "OnInterest(): blob data is " << endl;
-                ofstream ofs("/tmp/blob", ios_base::binary);
-                for (int i = 0; i < len; i++) {
-                    printf("%02x", (unsigned char)data[i]);
-                    ofs << data[i];
-                }
-                cout << endl;
-#endif
-                ndn::Blob bin_data(data, len);
-                handler->putToCcnd(bin_data);
-                cout << "OnInterest(): content object returned and interest consumed" << endl;
-            }
-            else {
-            // query failed, no entry found
-                cerr << "OnInterest(): error locating data: " << path << endl;
-            }
-            sqlite3_finalize(stmt);
-	}
+    else if(res == 0) {
+        cout << "OnInterest(): find directory: " << interest->getName() << endl;
     }
+    else {
+        cout << "OnInterest(): a match has been found for prefix: " << interest->getName() << endl;
+        cout << "OnInterest(): fetching content object from database" << endl;
+
+        int len = -1;
+        const char* data = NULL;
+        sqlite3_stmt *stmt;
+        sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ? AND version = ? AND segment = ?", -1, &stmt, 0);
+        sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_STATIC);
+        sqlite3_bind_int64(stmt, 2, version);
+        sqlite3_bind_int(stmt, 3, seg);
+        if(sqlite3_step(stmt) == SQLITE_ROW){
+            const char * data = (const char *)sqlite3_column_blob(stmt, 3);
+            len = sqlite3_column_bytes(stmt, 3);
+#ifdef DEBUG
+            cout << "OnInterest(): blob length=" << len << endl;
+            cout << "OnInterest(): blob data is " << endl;
+            ofstream ofs("/tmp/blob", ios_base::binary);
+            for (int i = 0; i < len; i++) {
+                printf("%02x", (unsigned char)data[i]);
+                ofs << data[i];
+            }
+            cout << endl;
+#endif
+            ndn::Blob bin_data(data, len);
+            handler->putToCcnd(bin_data);
+            cout << "OnInterest(): content object returned and interest consumed" << endl;
+        }
+        else {
+        // query failed, no entry found
+            cerr << "OnInterest(): error locating data: " << path << endl;
+        }
+        sqlite3_finalize(stmt);
+	}
     cout << "OnInterest(): Done" << endl;
     cout << "------------------------------------------------------------" << endl;
 }
@@ -140,8 +139,6 @@ int ProcessName(Ptr<Interest> interest, uint64_t &version, int &seg, string &pat
 #ifdef DEBUG
     cout << "ProcessName(): version=" << (int64_t)version << ", segment=" << seg << ", path=" << path << endl;
 #endif
-	child_selector = interest->getChildSelector();
-	child_selector_set = false;
 	if(version != -1 && seg != -1){
 		sqlite3_stmt *stmt;
 		sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ? AND version = ? AND segment = ?", -1, &stmt, 0);
@@ -197,16 +194,17 @@ int ProcessName(Ptr<Interest> interest, uint64_t &version, int &seg, string &pat
 			sqlite3_finalize(stmt);
 			return 1;
 		}
+		int mtime = sqlite3_column_int(stmt, 5);
 		sqlite3_finalize(stmt);
 #ifdef DEBUG
-        cout << "ProcessName(): recursively find file: " << path << endl;
+        cout << "ProcessName(): send dir: " << path << endl;
 #endif
-		int res = MatchFile(path, version, seg, child_selector);
-		return res;
+		SendDir(interest, path, mtime);
+		return 0;
 	}
 }
 
-bool CompareComponent(const string& a, const string& b){
+/*bool CompareComponent(const string& a, const string& b){
     ndn::Name path1(a);
     ndn::Name path2(b);
 	int len1 = path1.size();
@@ -214,28 +212,40 @@ bool CompareComponent(const string& a, const string& b){
     ndn::name::Component& comp1 = path1.get(len1 - 1);
     ndn::name::Component& comp2 = path2.get(len2 - 1);
 	return comp1<comp2;
-}
+}*/
 
-int MatchFile(string &path, uint64_t& version, int& seg, uint8_t child_selector){
+void SendDir(Ptr<Interest> interest, string &path, int mtime){
 	//finding the relevant file recursively
 	sqlite3_stmt *stmt;
 	sqlite3_prepare_v2(db, "SELECT * FROM file_system WHERE parent = ?", -1, &stmt, 0);
 	sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_STATIC);
-	vector<string> paths;
-	Name path_t;
+	
+	ndnfs::DirInfoArray infoa;
+	int count = 0
 	while(sqlite3_step(stmt) == SQLITE_ROW){
-		paths.push_back(string((const char *)sqlite3_column_text(stmt, 0)));
+	    ndnfs::DirInfo *info = infoa.add_di();
+	    info->set_type(sqlite3_column_int(stmt, 2));
+	    info->set_path(sqlite3_column_text(stmt, 0));
+	    count++;
+		//paths.push_back(string((const char *)sqlite3_column_text(stmt, 0)));
 	}
-	if(paths.size()!=0){
-		sort(paths.begin(), paths.end(), CompareComponent);
-		//can add selector here
-		if(!child_selector_set && child_selector){
-			if(child_selector == Interest::CHILD_RIGHT)
-				path = paths[paths.size()-1];
-			else
-				path = paths[0];
-			child_selector_set = false;
-		}
+	//return packet
+	if(count!=0){
+	    int size = infoa.ByteSize();
+	    char *wireData = new char[size];
+	    infoa.SerializeToArray(wireData, size);
+	    Name name = interest->getName();
+	    name.append("%C1.FS.ls").appendVersion(mtime);
+	    Content co(wireData, size);
+	    Data data0;
+	    data0.setName(name);
+	    data0.setContent(co);
+	    keychain->sign(data0,signer);
+	    Ptr<Blob> send_data = data0.encodeToWire();
+	    handler->putToCcnd(*send_data);
+	    return;
+		/*sort(paths.begin(), paths.end(), CompareComponent);
+		path = paths[0];
 		sqlite3_finalize(stmt);
 		sqlite3_prepare_v2(db, "SELECT * FROM file_system WHERE path = ?", -1, &stmt, 0);
 		sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_STATIC);
@@ -258,16 +268,16 @@ int MatchFile(string &path, uint64_t& version, int& seg, uint8_t child_selector)
 #ifdef DEBUG
 			cout << "MatchFile(): no such prefix/name found in ndnfs: " << path << endl;
 #endif
-        return -1;
+        return -1;*/
 	}
 	else
 #ifdef DEBUG
         cout << "MatchFile(): no such file found in path: " << path << endl;
 #endif
-    return -1;
+    return;
 }
 
-bool CheckSuffix(Ptr<Interest> interest, string path) {
+/*bool CheckSuffix(Ptr<Interest> interest, string path) {
 #ifdef DEBUG
     cout << "CheckSuffix(): checking min/maxSuffixComponents" << endl;
 #endif
@@ -301,7 +311,7 @@ bool CheckSuffix(Ptr<Interest> interest, string path) {
     }
 
     return true;
-}
+}*/
 
 // TODO: publisherPublicKeyDigest
 // related implementation not available currently in lib ccnx-cpp

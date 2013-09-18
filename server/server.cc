@@ -41,6 +41,7 @@ sqlite3 *db;
 bool child_selector_set;
 
 // create a global handler
+ndn::Name signer("/ndn/ucla.edu/qiuhan");
 Ptr<security::OSXPrivatekeyStore> privateStoragePtr = Ptr<security::OSXPrivatekeyStore>::Create();
 Ptr<security::Keychain> keychain = Ptr<security::Keychain>(new security::Keychain(privateStoragePtr, "/Users/ndn/qiuhan/policy", "/tmp/encryption.db"));//////policy needs to be changed
 Ptr<Wrapper> handler = Ptr<Wrapper>(new Wrapper(keychain));

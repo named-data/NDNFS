@@ -27,6 +27,8 @@
 #include <ndn.cxx/security/identity/osx-privatekey-store.h>
 #include <boost/bind.hpp>
 
+#include "dir.pb.h"
+
 
 #include <iostream>
 
@@ -43,7 +45,28 @@ void OnTimeout(Ptr<Closure> closure, Ptr<Interest> origInterest);
 
 void OnData(Ptr<Data> data) {
     Blob & content = data->content();
-    cout << "data: " << string((char*)content.buf(), content.size()) << endl;
+    Name data_name = data->getName();
+    name::Component& comp = data_name.get(data_name.size()-2);
+    if(comp.toUri() == "%C1.FS.ls"){
+        ndnfs::DirInfoArray infoa;
+        if(infoa.ParseFromArray(content.buf(),content.size())&&infoa.IsInitialized()){
+            cout << "This is a directory:"<<endl;
+            int n = infoa.di_size();
+            for(int i = 0; i<n; i++){
+                const ndnfs::DirInfo &info = infoa.di(i);
+                cout << info.path;
+                if(info.type == 0)
+                    cout <<"    DIR"<<endl;
+                else
+                    cout <<"    FILE"<<endl;
+            }
+        }
+        else{
+            cerr << "protobuf error"<<endl;
+        }
+    }
+    else
+        cout << "data: " << string((char*)content.buf(), content.size()) << endl;
 }
 
 void OnTimeout(Ptr<Closure> closure, Ptr<Interest> origInterest) {

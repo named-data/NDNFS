@@ -1,0 +1,19 @@
+package ndnfs;
+
+message DirInfo
+{
+  required string path = 1;
+  enum Type
+  {
+    DIR = 0;
+    FILE = 1;
+  }
+  required Type type = 2;
+}
+
+message DirInfoArray
+{
+  repeated DirInfo di = 1;
+}
+
+
