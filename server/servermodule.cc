@@ -226,9 +226,11 @@ void SendDir(Ptr<Interest> interest, string &path, int mtime){
 	    ndnfs::DirInfo *info = infoa.add_di();
 	    info->set_type(sqlite3_column_int(stmt, 2));
 	    info->set_path(sqlite3_column_text(stmt, 0));
+	    delete info;
 	    count++;
 		//paths.push_back(string((const char *)sqlite3_column_text(stmt, 0)));
 	}
+	sqlite3_finalize(stmt);
 	//return packet
 	if(count!=0){
 	    int size = infoa.ByteSize();
@@ -240,35 +242,10 @@ void SendDir(Ptr<Interest> interest, string &path, int mtime){
 	    Data data0;
 	    data0.setName(name);
 	    data0.setContent(co);
-	    keychain->sign(data0,signer);
+	    keychain->sign(data0, signer);
 	    Ptr<Blob> send_data = data0.encodeToWire();
 	    handler->putToCcnd(*send_data);
 	    return;
-		/*sort(paths.begin(), paths.end(), CompareComponent);
-		path = paths[0];
-		sqlite3_finalize(stmt);
-		sqlite3_prepare_v2(db, "SELECT * FROM file_system WHERE path = ?", -1, &stmt, 0);
-		sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_STATIC);
-		if(sqlite3_step(stmt) == SQLITE_ROW){
-			int type = sqlite3_column_int(stmt,2);
-			if (type == 1){
-#ifdef DEBUG
-                cout << "MatchFile(): find file: " << path << endl;
-#endif
-				version = sqlite3_column_int64(stmt,7);
-				seg = 0;
-				sqlite3_finalize(stmt);
-				return 1;
-			}
-			else
-				sqlite3_finalize(stmt);
-            return MatchFile(path, version, seg);
-		}
-		else
-#ifdef DEBUG
-			cout << "MatchFile(): no such prefix/name found in ndnfs: " << path << endl;
-#endif
-        return -1;*/
 	}
 	else
 #ifdef DEBUG

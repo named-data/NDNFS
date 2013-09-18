@@ -56,9 +56,9 @@ void OnData(Ptr<Data> data) {
                 const ndnfs::DirInfo &info = infoa.di(i);
                 cout << info.path;
                 if(info.type == 0)
-                    cout <<"    DIR"<<endl;
+                    cout <<":    DIR"<<endl;
                 else
-                    cout <<"    FILE"<<endl;
+                    cout <<":    FILE"<<endl;
             }
         }
         else{
