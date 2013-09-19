@@ -11,7 +11,8 @@ def options(opt):
     # if Utils.unversioned_sys_platform () == "darwin":
     #     pass
 
-    opt.load('compiler_c compiler_cxx boost ccnx mongodb')
+    opt.load('compiler_c compiler_cxx')
+    opt.load('boost protoc', tooldir=['waf-tools'])
 
 def configure(conf):
     conf.load("compiler_c compiler_cxx")
@@ -48,50 +49,37 @@ def configure(conf):
 
     conf.write_config_header('config.h')
 
-    if not conf.check_cfg(package='openssl', args=['--cflags', '--libs'], uselib_store='SSL', mandatory=False):
-        libcrypto = conf.check_cc(lib='crypto',
-                                  header_name='openssl/crypto.h',
-                                  define_name='HAVE_SSL',
-                                  uselib_store='SSL')
-    else:
-        conf.define ("HAVE_SSL", 1)
-    if not conf.get_define ("HAVE_SSL"):
-        conf.fatal ("Cannot find SSL libraries")
-
-    conf.load ('ccnx')
     conf.check_cfg(package='libndn.cxx', args=['--cflags', '--libs'], uselib_store='NDNCXX', mandatory=True)
 
     conf.load('boost')
     conf.check_boost(lib='system test iostreams filesystem thread')
 
-    conf.check_ccnx (path=conf.options.ccnx_dir)
-    conf.define ('CCNX_PATH', conf.env.CCNX_ROOT)
-
     if conf.options._test:
         conf.define ('_TESTS', 1)
         conf.env.TEST = 1
+
+    conf.load('protoc')
 
 def build (bld):
     bld (
         target = "ndnfs",
         features = ["cxx", "cxxprogram"],
         source = bld.path.ant_glob(['fs/*.cc']),
-        use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD FUSE CCNX SSL NDNCXX SQLITE3',
-        includes = ".",
+        use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD FUSE NDNCXX SQLITE3',
+        includes = '.'
         )
     bld (
         target = "ndnfs-server",
         features = ["cxx", "cxxprogram"],
-        source = bld.path.ant_glob(['server/server.cc', 'server/servermodule.cc']),
-        use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD CCNX SSL NDNCXX SQLITE3',
-        includes = ".",
+        source = bld.path.ant_glob (['server/server.cc', 'server/servermodule.cc', 'server/dir.proto']),
+        use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD NDNCXX SQLITE3',
+        includes = 'server'
         )
     bld (
         target = "test-client",
         features = ["cxx", "cxxprogram"],
-        source = bld.path.ant_glob(['test/client.cc']),
-        use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD CCNX SSL NDNCXX',
-        includes = ".",
+        source = 'test/client.cc',
+        use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD NDNCXX',
         )
 
 @Configure.conf
