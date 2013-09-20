@@ -56,7 +56,7 @@ void OnInterest(Ptr<Interest> interest) {
 		cout << "OnInterest(): no match found for prefix: " << interest->getName() << endl;
     }
     else if(res == 0) {
-        cout << "OnInterest(): find directory: " << interest->getName() << endl;
+        cout << "OnInterest(): find match: " << interest->getName() << endl;
     }
     else {
         cout << "OnInterest(): a match has been found for prefix: " << interest->getName() << endl;
@@ -157,10 +157,9 @@ int ProcessName(Ptr<Interest> interest, uint64_t &version, int &seg, string &pat
 	}
 	else if(version != -1){
 		sqlite3_stmt *stmt;
-		sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ? AND version = ? AND segment = ?", -1, &stmt, 0);
+		sqlite3_prepare_v2(db, "SELECT * FROM file_versions WHERE path = ? AND version = ? ", -1, &stmt, 0);
 		sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_STATIC);
 		sqlite3_bind_int64(stmt, 2, version);
-		sqlite3_bind_int(stmt,3, 0);
 		if(sqlite3_step(stmt)!= SQLITE_ROW){
 #ifdef DEBUG
 			cout << "ProcessName(): no such file/directory found in ndnfs: " << path << endl;
@@ -168,9 +167,10 @@ int ProcessName(Ptr<Interest> interest, uint64_t &version, int &seg, string &pat
 			sqlite3_finalize(stmt);
 			return -1;
 		}
-		seg = 0;
+		
+		SendFile(interest, version, sqlite3_column_int(stmt,2), sqlite3_column_int(stmt,3), 0);
 		sqlite3_finalize(stmt);
-		return 1;
+		return 0;
 	}
 	else{
 		sqlite3_stmt *stmt;
@@ -190,9 +190,21 @@ int ProcessName(Ptr<Interest> interest, uint64_t &version, int &seg, string &pat
 			cout << "ProcessName(): find file: " << path << endl;
 #endif
 			version = sqlite3_column_int64(stmt, 7);
-			seg = 0;
 			sqlite3_finalize(stmt);
-			return 1;
+			sqlite3_prepare_v2(db, "SELECT * FROM file_versions WHERE path = ? AND version = ? ", -1, &stmt, 0);
+		    sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_STATIC);
+		    sqlite3_bind_int64(stmt, 2, version);
+		    if(sqlite3_step(stmt)!= SQLITE_ROW){
+#ifdef DEBUG
+			    cout << "ProcessName(): no such file/directory found in ndnfs: " << path << endl;
+#endif
+			    sqlite3_finalize(stmt);
+			    return -1;
+		    }
+		
+		    SendFile(interest, version, sqlite3_column_int(stmt,2), sqlite3_column_int(stmt,3),1);
+			sqlite3_finalize(stmt);
+			return 0;
 		}
 		int mtime = sqlite3_column_int(stmt, 5);
 		sqlite3_finalize(stmt);
@@ -213,8 +225,30 @@ int ProcessName(Ptr<Interest> interest, uint64_t &version, int &seg, string &pat
     ndn::name::Component& comp2 = path2.get(len2 - 1);
 	return comp1<comp2;
 }*/
+void SendFile(Ptr<Interest>interest, uint64_t version, int sizef, int totalseg, int type){
+    ndnfs::FileInfo infof;
+    infof.set_size(sizef);
+    infof.set_totalseg(totalseg);
+    infof.set_version(version);
+    int size = infof.ByteSize();
+    char *wireData = new char[size];
+    infof.SerializeToArray(wireData, size);
+    Name name = interest->getName();
+    if(type == 0)
+        name.append("%C1.FS.file");
+    else
+        name.appendVersion(version).append("%C1.FS.file");
+    Content co(wireData, size);
+    Data data0;
+    data0.setName(name);
+    data0.setContent(co);
+    keychain->sign(data0, signer);
+    Ptr<Blob> send_data = data0.encodeToWire();
+    handler->putToCcnd(*send_data);
+    return;
+}
 
-void SendDir(Ptr<Interest> interest, string &path, int mtime){
+void SendDir(Ptr<Interest> interest, string path, int mtime){
 	//finding the relevant file recursively
 	sqlite3_stmt *stmt;
 	sqlite3_prepare_v2(db, "SELECT * FROM file_system WHERE parent = ?", -1, &stmt, 0);
@@ -237,7 +271,7 @@ void SendDir(Ptr<Interest> interest, string &path, int mtime){
 	    char *wireData = new char[size];
 	    infoa.SerializeToArray(wireData, size);
 	    Name name = interest->getName();
-	    name.append("%C1.FS.ls").appendVersion(mtime);
+	    name.appendVersion(mtime).append("%C1.FS.dir");
 	    Content co(wireData, size);
 	    Data data0;
 	    data0.setName(name);

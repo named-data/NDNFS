@@ -28,6 +28,7 @@
 #include <boost/bind.hpp>
 
 #include "dir.pb.h"
+#include "file.pb.h"
 
 
 #include <iostream>
@@ -46,11 +47,11 @@ void OnTimeout(Ptr<Closure> closure, Ptr<Interest> origInterest);
 void OnData(Ptr<Data> data) {
     Blob & content = data->content();
     Name data_name = data->getName();
-    name::Component& comp = data_name.get(data_name.size()-2);
-    if(comp.toUri() == "%C1.FS.ls"){
+    name::Component& comp = data_name.get(data_name.size()-1);
+    if(comp.toUri() == "%C1.FS.dir"){
         ndnfs::DirInfoArray infoa;
-        if(infoa.ParseFromArray(content.buf(),content.size())&&infoa.IsInitialized()){
-            cout << "This is a directory:"<<endl;
+        if(infoa.ParseFromArray(content.buf(),content.size()) && infoa.IsInitialized()){
+            cout << "This is a directory:" << endl;
             int n = infoa.di_size();
             for(int i = 0; i<n; i++){
                 const ndnfs::DirInfo &info = infoa.di(i);
@@ -62,7 +63,20 @@ void OnData(Ptr<Data> data) {
             }
         }
         else{
-            cerr << "protobuf error"<<endl;
+            cerr << "protobuf error" << endl;
+        }
+    }
+    else if(comp.toUri() == "%C1.FS.file"){
+        ndnfs::FileInfo infof;
+        if(infof.ParseFromArray(content.buf(),content.size()) && infof.IsInitialized()){
+            cout << "This is a file" << endl;
+            cout << "Name:  " << data->getName().toUri() << endl;
+            cout << "size:  " << infof.size << endl;
+            cout << "version:   " << infof.version << endl;
+            cout << "total segments" << infof.totalseg << endl;
+        }
+        else{
+            cerr << "protobuf error" << endl;
         }
     }
     else

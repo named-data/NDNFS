@@ -93,13 +93,13 @@ int main(int argc, char **argv) {
     Ptr<security::Certificate> certdsk = keychain->getAnyCertificate(certificatedsk_name);
     Ptr<Blob> cert0 = certdsk->encodeToWire();
     cerr << "publish DSK: " << cert0->size() << endl;
-    handler->putToCcnd(*cert0);////////////
+    handler->putToCcnd(*cert0);
 
     Name certificateksk_name("/ndn/ucla.edu/qiuhan/KSK-1378422677/ID-CERT/1378423300");
     Ptr<security::Certificate> certksk = keychain->getAnyCertificate(certificateksk_name);
     Ptr<Blob> cert1 = certksk->encodeToWire();
     cerr << "publish KSK: " << cert1->size() << endl;
-    handler->putToCcnd(*cert1);////////////
+    handler->putToCcnd(*cert1);
     
     cout << "main: open sqlite database" << endl;
 
