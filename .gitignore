@@ -6,9 +6,13 @@
 *.cc~
 *.h~
 
-ndnfs
 
 .DS_Store
 .lock*
 .waf*
 build/
+
+*.db
+*.dat
+*.properties
+*.pyc

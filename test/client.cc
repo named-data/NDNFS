@@ -55,8 +55,8 @@ void OnData(Ptr<Data> data) {
             int n = infoa.di_size();
             for(int i = 0; i<n; i++){
                 const ndnfs::DirInfo &info = infoa.di(i);
-                cout << info.path;
-                if(info.type == 0)
+                cout << info.path();
+                if(info.type() == 0)
                     cout <<":    DIR"<<endl;
                 else
                     cout <<":    FILE"<<endl;
@@ -71,9 +71,9 @@ void OnData(Ptr<Data> data) {
         if(infof.ParseFromArray(content.buf(),content.size()) && infof.IsInitialized()){
             cout << "This is a file" << endl;
             cout << "Name:  " << data->getName().toUri() << endl;
-            cout << "size:  " << infof.size << endl;
-            cout << "version:   " << infof.version << endl;
-            cout << "total segments" << infof.totalseg << endl;
+            cout << "size:  " << infof.size() << endl;
+            cout << "version:   " << infof.version() << endl;
+            cout << "total segments" << infof.totalseg() << endl;
         }
         else{
             cerr << "protobuf error" << endl;
@@ -134,7 +134,7 @@ int main (int argc, char **argv) {
             interestPtr->setChildSelector(child_selector);
             break;
         default: 
-            Usage(); 
+            Usage();
             break;
         }
     }

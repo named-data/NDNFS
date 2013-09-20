@@ -71,15 +71,16 @@ def build (bld):
     bld (
         target = "ndnfs-server",
         features = ["cxx", "cxxprogram"],
-        source = bld.path.ant_glob (['server/server.cc', 'server/servermodule.cc', 'server/dir.proto']),
+        source = bld.path.ant_glob (['server/server.cc', 'server/servermodule.cc', 'server/dir.proto', 'server/file.proto']),
         use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD NDNCXX SQLITE3',
         includes = 'server'
         )
     bld (
         target = "test-client",
         features = ["cxx", "cxxprogram"],
-        source = 'test/client.cc',
+        source = 'test/client.cc server/dir.proto server/file.proto',
         use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD NDNCXX',
+        includes = 'server'
         )
 
 @Configure.conf
