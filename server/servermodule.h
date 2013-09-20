@@ -27,6 +27,7 @@
 #include <ndn.cxx/fields/name.h>
 #include <ndn.cxx/interest.h>
 #include "dir.pb.h"
+#include "file.pb.h"
 
 #include <sqlite3.h>
 
@@ -59,11 +60,11 @@ int ProcessName(ndn::Ptr<ndn::Interest> interest, uint64_t &version, int &seg, s
 // search mongo db specified by c from entry specified by cursor for 
 // possible matches. whenever finding a possible match, check if it suffices
 // the selectors.
-void SendDir(Ptr<Interest> interest, string &path, int mtime);
+void SendDir(Ptr<Interest> interest, string path, int mtime);
 // check if the directory/content object specified by cursor suffices 
 // the min/max suffix components selector specified in interest. 
 // note that if and only if cursor points to a segment entry can a match be 
 // found. skip checking if cursor points to some other type entry.
 //bool CompareComponent(const std::string& a, const std::string& b);
-
+void SendFile(Ptr<Interest>interest, uint64_t version, int sizef, int totalseg, int type);
 #endif // __SERVER_MODULE_H__
