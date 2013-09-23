@@ -20,7 +20,7 @@
 
 #include <cstdio>
 #include <iostream>
-#include <fstream>
+//#include <fstream>
 #include <string>
 #include <vector>
 
@@ -53,7 +53,7 @@ void OnInterest(Ptr<Interest> interest) {
     cout << "OnInterest(): extracted version=" << (int64_t)version << ", segment=" << seg << ", path=" << path << endl;
 #endif
     if (res == -1) {
-		cout << "OnInterest(): no match found for prefix: " << interest->getName() << endl;
+        cout << "OnInterest(): no match found for prefix: " << interest->getName() << endl;
     }
     else if(res == 0) {
         cout << "OnInterest(): find match: " << interest->getName() << endl;
@@ -75,10 +75,10 @@ void OnInterest(Ptr<Interest> interest) {
 #ifdef NDNFS_DEBUG
             cout << "OnInterest(): blob length=" << len << endl;
             cout << "OnInterest(): blob data is " << endl;
-            ofstream ofs("/tmp/blob", ios_base::binary);
+            //ofstream ofs("/tmp/blob", ios_base::binary);
             for (int i = 0; i < len; i++) {
                 printf("%02x", (unsigned char)data[i]);
-                ofs << data[i];
+                //ofs << data[i];
             }
             cout << endl;
 #endif
@@ -108,26 +108,25 @@ void ndnName2String(const ndn::Name& name, uint64_t &version, int &seg, string &
 #ifdef NDNFS_DEBUG
         cout << "ndnName2String(): interest name component: " << iter->toUri() << endl;
 #endif
-		const uint8_t marker = *(iter->buf());
-		// cout << (unsigned int)marker << endl;
-		if (marker == 0xFD) {
-			version = iter->toVersion(); 
-		} 
-		else if (marker == 0x00) {
-			seg = iter->toSeqNum();
-		}
-		else {
-			string comp = iter->toUri();
-			path += (slash + comp);
-		}
-	
+        const uint8_t marker = *(iter->buf());
+        // cout << (unsigned int)marker << endl;
+        if (marker == 0xFD) {
+            version = iter->toVersion(); 
+        }
+        else if (marker == 0x00) {
+            seg = iter->toSeqNum();
+        }
+        else {
+            string comp = iter->toUri();
+            path += (slash + comp);
+        }
     }
 #ifdef NDNFS_DEBUG
     cout << "ndnName2String(): interest name: " << path << endl;
 #endif
     path = path.substr(global_prefix.length());
     if (path == "")
-		path = string("/");
+        path = string("/");
 #ifdef NDNFS_DEBUG
     cout << "ndnName2String(): file path after trimming: " << path << endl;
 #endif
@@ -201,7 +200,7 @@ int ProcessName(Ptr<Interest> interest, uint64_t &version, int &seg, string &pat
                 sqlite3_finalize(stmt);
                 return -1;
             }
-	    
+            
             SendFile(interest, version, sqlite3_column_int(stmt,2), sqlite3_column_int(stmt,3),1);
             sqlite3_finalize(stmt);
             return 0;
@@ -225,6 +224,7 @@ int ProcessName(Ptr<Interest> interest, uint64_t &version, int &seg, string &pat
   ndn::name::Component& comp2 = path2.get(len2 - 1);
   return comp1<comp2;
   }*/
+
 void SendFile(Ptr<Interest>interest, uint64_t version, int sizef, int totalseg, int type){
     ndnfs::FileInfo infof;
     infof.set_size(sizef);
