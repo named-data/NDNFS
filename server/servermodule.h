@@ -14,7 +14,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *
- * Author: Zhe Wen <wenzhe@cs.ucla.edu>
+ * Author: Qiuhan Ding <dingqiuhan@gmail.com>, Wentao Shang <wentao@cs.ucla.edu>
  */
 
 #ifndef __SERVER_MODULE_H__
@@ -32,9 +32,6 @@
 
 #include <sqlite3.h>
 
-#define DB_ENTRY_TYPE_DIR	0
-#define DB_ENTRY_TYPE_FIL	1
-
 extern const char *db_name;
 extern sqlite3 *db;
 extern ndn::Ptr<ndn::security::OSXPrivatekeyStore> privateStoragePtr;
@@ -44,29 +41,15 @@ extern ndn::Name signer;
 // Global prefix for NDNFS
 extern std::string global_prefix;
 
-// callbalck on receiving incoming interest.
-// respond proper content object and comsumes the interest. or simple ignore
-// the interest if no content object found.
 void OnInterest(ndn::Ptr<ndn::Interest> interest);
 
-// ndn-ndnfs name converter. converting name from ndn::Name representation to
-// string representation.
 void ndnName2String(const ndn::Name& name, uint64_t &version, int &seg, std::string &path);
 
-// ndn name selector. deriving NDNFS name that specifies a content object from
-// the NDN name given in an interest. return the NDNFS name on success; NULL 
-// on failure (no match found).
-int ProcessName(ndn::Ptr<ndn::Interest> interest, uint64_t &version, int &seg, std::string &path);
+void ProcessName(ndn::Name& interest_name);
 
-// search mongo db specified by c from entry specified by cursor for 
-// possible matches. whenever finding a possible match, check if it suffices
-// the selectors.
-void SendDir(ndn::Ptr<ndn::Interest> interest, const std::string& path, int mtime);
-// check if the directory/content object specified by cursor suffices 
-// the min/max suffix components selector specified in interest. 
-// note that if and only if cursor points to a segment entry can a match be 
-// found. skip checking if cursor points to some other type entry.
+void SendDir(const std::string& path, int mtime);
+
 //bool CompareComponent(const std::string& a, const std::string& b);
-void SendFile(ndn::Ptr<ndn::Interest> interest, uint64_t version, int sizef, int totalseg, int type);
+void SendFile(const std::string& path, uint64_t version, int sizef, int totalseg);
 
 #endif // __SERVER_MODULE_H__

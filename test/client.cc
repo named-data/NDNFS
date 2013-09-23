@@ -14,7 +14,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *
- * Author: Zhe Wen <wenzhe@cs.ucla.edu>
+ * Author: Qiuhan Ding <dingqiuhan@gmail.com>
  */
 
 
@@ -30,7 +30,6 @@
 #include "dir.pb.h"
 #include "file.pb.h"
 
-
 #include <iostream>
 
 using namespace std;
@@ -39,16 +38,17 @@ using namespace boost;
 
 Ptr<security::OSXPrivatekeyStore> privateStoragePtr = Ptr<security::OSXPrivatekeyStore>::Create();
 Ptr<security::Keychain> keychain = Ptr<security::Keychain>(new security::Keychain(privateStoragePtr, "/Users/ndn/qiuhan/policy", "/tmp/encryption.db"));
-Ptr<Wrapper> handler = Ptr<Wrapper>(new Wrapper(keychain));////////////////////////
+Ptr<Wrapper> handler = Ptr<Wrapper>(new Wrapper(keychain));
 
 void OnData(Ptr<Data> data);
 void OnTimeout(Ptr<Closure> closure, Ptr<Interest> origInterest);
 
 void OnData(Ptr<Data> data) {
-    Blob & content = data->content();
-    Name data_name = data->getName();
-    name::Component& comp = data_name.get(data_name.size()-1);
-    if(comp.toUri() == "%C1.FS.dir"){
+    Blob& content = data->content();
+    Name& data_name = data->getName();
+    name::Component& comp = data_name.get(data_name.size() - 2);
+    string marker = comp.toUri();
+    if(marker == "%C1.FS.dir"){
         ndnfs::DirInfoArray infoa;
         if(infoa.ParseFromArray(content.buf(),content.size()) && infoa.IsInitialized()){
             cout << "This is a directory:" << endl;
@@ -66,14 +66,14 @@ void OnData(Ptr<Data> data) {
             cerr << "protobuf error" << endl;
         }
     }
-    else if(comp.toUri() == "%C1.FS.file"){
+    else if(marker == "%C1.FS.file"){
         ndnfs::FileInfo infof;
         if(infof.ParseFromArray(content.buf(),content.size()) && infof.IsInitialized()){
             cout << "This is a file" << endl;
-            cout << "Name:  " << data->getName().toUri() << endl;
+            cout << "name:  " << data->getName().toUri() << endl;
             cout << "size:  " << infof.size() << endl;
             cout << "version:   " << infof.version() << endl;
-            cout << "total segments" << infof.totalseg() << endl;
+            cout << "total segments: " << infof.totalseg() << endl;
         }
         else{
             cerr << "protobuf error" << endl;
@@ -90,7 +90,7 @@ void OnTimeout(Ptr<Closure> closure, Ptr<Interest> origInterest) {
 }
 
 void Usage() {
-    fprintf(stderr, "usage: ./client [-n name][-i minsuffix][-a maxfuffix][-c childeselector]\n");
+    fprintf(stderr, "usage: ./client [-n name]\n");
     exit(1);
 }
 
@@ -103,41 +103,24 @@ void verifiedError(Ptr<Interest> interest)
 int main (int argc, char **argv) {
     Ptr<Interest> interestPtr = Ptr<Interest>(new Interest());
     interestPtr->setScope(Interest::SCOPE_LOCAL_HOST);
-    interestPtr->setAnswerOriginKind(0);
+    //interestPtr->setAnswerOriginKind(0);
 
-    const char* name = "";
-    uint32_t min_suffix_comps = Interest::ncomps;
-    uint32_t max_suffix_comps = Interest::ncomps;
-    uint8_t child_selector = Interest::CHILD_DEFAULT;
+    const char* name = NULL;
 
     int opt;
-    while ((opt = getopt(argc, argv, "n:i:a:c:")) != -1) {
+    while ((opt = getopt(argc, argv, "n:")) != -1) {
         switch (opt) {
         case 'n': 
             name = optarg;
             cout << "main(): set name: " << name << endl;
             interestPtr->setName(ndn::Name(name));
             break;
-        case 'i': 
-            min_suffix_comps = atoi(optarg);
-            cout << "main(): set min suffix components: " << min_suffix_comps << endl;
-            interestPtr->setMinSuffixComponents(min_suffix_comps);
-            break;
-        case 'a': 
-            max_suffix_comps = atoi(optarg);
-            cout << "main(): set max suffix components: " << max_suffix_comps << endl;
-            interestPtr->setMaxSuffixComponents(max_suffix_comps);
-            break;
-        case 'c': 
-            child_selector = atoi(optarg);
-            cout << "main(): set child selector: " << (uint32_t)child_selector << endl;
-            interestPtr->setChildSelector(child_selector);
-            break;
         default: 
             Usage();
             break;
         }
     }
+
     Ptr<Closure> closure = Ptr<Closure> (new Closure(boost::bind(OnData, _1),
                                                      boost::bind(OnTimeout, _1, _2),
                                                      boost::bind(verifiedError, _1),

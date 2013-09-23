@@ -82,6 +82,13 @@ def build (bld):
         use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD NDNCXX',
         includes = 'server'
         )
+    bld (
+        target = "cat-file",
+        features = ["cxx", "cxxprogram"],
+        source = 'test/cat_file.cc server/dir.proto server/file.proto',
+        use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD NDNCXX',
+        includes = 'server'
+        )
 
 @Configure.conf
 def add_supported_cxxflags(self, cxxflags):

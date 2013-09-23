@@ -14,7 +14,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *
- * Author: Zhe Wen <wenzhe@cs.ucla.edu>
+ * Author: Qiuhan Ding <dingqiuhan@gmail.com>, Wentao Shang <wentao@cs.ucla.edu>
  */
 
 #include <iostream>
@@ -38,7 +38,6 @@ using namespace ndn;
 
 const char *db_name = "/tmp/ndnfs.db";
 sqlite3 *db;
-bool child_selector_set;
 
 // create a global handler
 ndn::Name signer("/ndn/ucla.edu/qiuhan");

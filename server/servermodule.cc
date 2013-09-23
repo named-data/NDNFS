@@ -14,13 +14,14 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *
- * Author: Zhe Wen <wenzhe@cs.ucla.edu>
+ * Author: Qiuhan Ding <dingqiuhan@gmail.com>, Wentao Shang <wentao@cs.ucla.edu>
  */
 #define NDNFS_DEBUG
 
 #include <cstdio>
 #include <iostream>
 //#include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -36,105 +37,58 @@ using namespace boost;
 
 extern Ptr<Wrapper> handler;
 
-// callbalck on receiving incoming interest.
-// respond proper content object and comsumes the interest. or simple ignore
-// the interest if no content object found.
 void OnInterest(Ptr<Interest> interest) {
-    static int interest_cnt = 0;
 #ifdef NDNFS_DEBUG
-    cout << interest_cnt++ << "------------------------------------------" << endl;
+    cout << "------------------------------------------------------------" << endl;
     cout << "OnInterest(): interest name: " << interest->getName() << endl;
 #endif
-    string path;
-    uint64_t version;
-    int seg;
-    int res = ProcessName(interest, version, seg, path);
-#ifdef NDNFS_DEBUG
-    cout << "OnInterest(): extracted version=" << (int64_t)version << ", segment=" << seg << ", path=" << path << endl;
-#endif
-    if (res == -1) {
-        cout << "OnInterest(): no match found for prefix: " << interest->getName() << endl;
-    }
-    else if(res == 0) {
-        cout << "OnInterest(): find match: " << interest->getName() << endl;
-    }
-    else {
-        cout << "OnInterest(): a match has been found for prefix: " << interest->getName() << endl;
-        cout << "OnInterest(): fetching content object from database" << endl;
-
-        int len = -1;
-        const char* data = NULL;
-        sqlite3_stmt *stmt;
-        sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ? AND version = ? AND segment = ?", -1, &stmt, 0);
-        sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_int64(stmt, 2, version);
-        sqlite3_bind_int(stmt, 3, seg);
-        if(sqlite3_step(stmt) == SQLITE_ROW){
-            const char * data = (const char *)sqlite3_column_blob(stmt, 3);
-            len = sqlite3_column_bytes(stmt, 3);
-#ifdef NDNFS_DEBUG
-            cout << "OnInterest(): blob length=" << len << endl;
-            cout << "OnInterest(): blob data is " << endl;
-            //ofstream ofs("/tmp/blob", ios_base::binary);
-            for (int i = 0; i < len; i++) {
-                printf("%02x", (unsigned char)data[i]);
-                //ofs << data[i];
-            }
-            cout << endl;
-#endif
-            ndn::Blob bin_data(data, len);
-            handler->putToCcnd(bin_data);
-            cout << "OnInterest(): content object returned and interest consumed" << endl;
-        }
-        else {
-            // query failed, no entry found
-            cerr << "OnInterest(): error locating data: " << path << endl;
-        }
-        sqlite3_finalize(stmt);
-	}
+    ProcessName(interest->getName());
     cout << "OnInterest(): Done" << endl;
     cout << "------------------------------------------------------------" << endl;
 }
 
-// ndn-ndnfs name converter. converting name from ndn::Name representation to
-// string representation.
 void ndnName2String(const ndn::Name& name, uint64_t &version, int &seg, string &path) {
-    path = "";
-    string slash("/");
     version = -1;
     seg = -1;
+    ostringstream oss;
     ndn::Name::const_iterator iter = name.begin();
     for (; iter != name.end(); iter++) {
 #ifdef NDNFS_DEBUG
         cout << "ndnName2String(): interest name component: " << iter->toUri() << endl;
 #endif
         const uint8_t marker = *(iter->buf());
-        // cout << (unsigned int)marker << endl;
+        //cout << (unsigned int)marker << endl;
         if (marker == 0xFD) {
             version = iter->toVersion(); 
         }
         else if (marker == 0x00) {
             seg = iter->toSeqNum();
         }
+        else if (marker == 0xC1) {
+            continue;
+        }
         else {
             string comp = iter->toUri();
-            path += (slash + comp);
+            oss << "/" << comp;
         }
     }
+    path = oss.str();
 #ifdef NDNFS_DEBUG
-    cout << "ndnName2String(): interest name: " << path << endl;
+    cout << "ndnName2String(): full path: " << path << endl;
 #endif
     path = path.substr(global_prefix.length());
     if (path == "")
         path = string("/");
 #ifdef NDNFS_DEBUG
-    cout << "ndnName2String(): file path after trimming: " << path << endl;
+    cout << "ndnName2String(): file path after removing global prefix: " << path << endl;
 #endif
 }
 
-
-int ProcessName(Ptr<Interest> interest, uint64_t &version, int &seg, string &path){
-    ndnName2String(interest->getName(), version, seg, path);
+void ProcessName(Name& interest_name) {
+    string path;
+    uint64_t version;
+    int seg;
+    ndnName2String(interest_name, version, seg, path);
 #ifdef NDNFS_DEBUG
     cout << "ProcessName(): version=" << (int64_t)version << ", segment=" << seg << ", path=" << path << endl;
 #endif
@@ -144,74 +98,90 @@ int ProcessName(Ptr<Interest> interest, uint64_t &version, int &seg, string &pat
         sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_STATIC);
         sqlite3_bind_int64(stmt, 2, version);
         sqlite3_bind_int(stmt, 3, seg);
-        if(sqlite3_step(stmt)!= SQLITE_ROW){
+        if(sqlite3_step(stmt) != SQLITE_ROW){
 #ifdef NDNFS_DEBUG
             cout << "ProcessName(): no such file/directory found in ndnfs: " << path << endl;
 #endif
             sqlite3_finalize(stmt);
-            return -1;
+            return;
         }
+
+        cout << "ProcessName(): a match has been found for prefix: " << interest_name << endl;
+        cout << "ProcessName(): fetching content object from database" << endl;
+       
+        const char * data = (const char *)sqlite3_column_blob(stmt, 3);
+        int len = sqlite3_column_bytes(stmt, 3);
+#ifdef NDNFS_DEBUG
+        cout << "ProcessName(): blob length=" << len << endl;
+        cout << "ProcessName(): blob data is " << endl;
+        //ofstream ofs("/tmp/blob", ios_base::binary);
+        for (int i = 0; i < len; i++) {
+            printf("%02x", (unsigned char)data[i]);
+            //ofs << data[i];
+        }
+        cout << endl;
+#endif
+        ndn::Blob bin_data(data, len);
+        handler->putToCcnd(bin_data);
+        cout << "ProcessName(): content object returned and interest consumed" << endl;
         sqlite3_finalize(stmt);
-        return 1;
     }
-    else if(version != -1){
+    else if (version != -1 && seg == -1) {
         sqlite3_stmt *stmt;
         sqlite3_prepare_v2(db, "SELECT * FROM file_versions WHERE path = ? AND version = ? ", -1, &stmt, 0);
         sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_STATIC);
         sqlite3_bind_int64(stmt, 2, version);
-        if(sqlite3_step(stmt)!= SQLITE_ROW){
+        if(sqlite3_step(stmt) != SQLITE_ROW){
 #ifdef NDNFS_DEBUG
             cout << "ProcessName(): no such file/directory found in ndnfs: " << path << endl;
 #endif
             sqlite3_finalize(stmt);
-            return -1;
+            return;
         }
 		
-        SendFile(interest, version, sqlite3_column_int(stmt,2), sqlite3_column_int(stmt,3), 0);
+        SendFile(path, version, sqlite3_column_int(stmt,2), sqlite3_column_int(stmt,3));
         sqlite3_finalize(stmt);
-        return 0;
     }
-    else{
+    else if (version == -1 && seg == -1) {
         sqlite3_stmt *stmt;
         sqlite3_prepare_v2(db, "SELECT * FROM file_system WHERE path = ?", -1, &stmt, 0);
         sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_STATIC);
-        if(sqlite3_step(stmt)!= SQLITE_ROW){
+        if(sqlite3_step(stmt) != SQLITE_ROW){
 #ifdef NDNFS_DEBUG
             cout << "ProcessName(): no such file/directory found in ndnfs: " << path << endl;
 #endif
             sqlite3_finalize(stmt);
-            return -1;
+            return;
         }
-        //recursively finding path
+        
         int type = sqlite3_column_int(stmt,2);
         if(type == 1){
 #ifdef NDNFS_DEBUG
-            cout << "ProcessName(): find file: " << path << endl;
+            cout << "ProcessName(): found file: " << path << endl;
 #endif
             version = sqlite3_column_int64(stmt, 7);
             sqlite3_finalize(stmt);
             sqlite3_prepare_v2(db, "SELECT * FROM file_versions WHERE path = ? AND version = ? ", -1, &stmt, 0);
             sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_STATIC);
             sqlite3_bind_int64(stmt, 2, version);
-            if(sqlite3_step(stmt)!= SQLITE_ROW){
+            if(sqlite3_step(stmt) != SQLITE_ROW){
 #ifdef NDNFS_DEBUG
-                cout << "ProcessName(): no such file/directory found in ndnfs: " << path << endl;
+                cout << "ProcessName(): no such file version found in ndnfs: " << path << endl;
 #endif
                 sqlite3_finalize(stmt);
-                return -1;
+                return;
             }
             
-            SendFile(interest, version, sqlite3_column_int(stmt,2), sqlite3_column_int(stmt,3),1);
+            SendFile(path, version, sqlite3_column_int(stmt,2), sqlite3_column_int(stmt,3));
             sqlite3_finalize(stmt);
-            return 0;
-        }
-        int mtime = sqlite3_column_int(stmt, 5);
-        sqlite3_finalize(stmt);
+        } else {
 #ifdef NDNFS_DEBUG
-        cout << "ProcessName(): send dir: " << path << endl;
+            cout << "ProcessName(): found dir: " << path << endl;
 #endif
-        SendDir(interest, path, mtime);
-        return 0;
+            int mtime = sqlite3_column_int(stmt, 5);
+            sqlite3_finalize(stmt);
+            SendDir(path, mtime);
+        }
     }
 }
 
@@ -225,7 +195,7 @@ int ProcessName(Ptr<Interest> interest, uint64_t &version, int &seg, string &pat
   return comp1<comp2;
   }*/
 
-void SendFile(Ptr<Interest>interest, uint64_t version, int sizef, int totalseg, int type){
+void SendFile(const string& path, uint64_t version, int sizef, int totalseg) {
     ndnfs::FileInfo infof;
     infof.set_size(sizef);
     infof.set_totalseg(totalseg);
@@ -233,11 +203,8 @@ void SendFile(Ptr<Interest>interest, uint64_t version, int sizef, int totalseg, 
     int size = infof.ByteSize();
     char *wireData = new char[size];
     infof.SerializeToArray(wireData, size);
-    Name name = interest->getName();
-    if(type == 0)
-        name.append("%C1.FS.file");
-    else
-        name.appendVersion(version).append("%C1.FS.file");
+    Name name(global_prefix + path);
+    name.append("%C1.FS.file").appendVersion(version);
     Content co(wireData, size);
     Data data0;
     data0.setName(name);
@@ -248,7 +215,7 @@ void SendFile(Ptr<Interest>interest, uint64_t version, int sizef, int totalseg, 
     return;
 }
 
-void SendDir(Ptr<Interest> interest, const string& path, int mtime){
+void SendDir(const string& path, int mtime) {
     //finding the relevant file recursively
     sqlite3_stmt *stmt;
     sqlite3_prepare_v2(db, "SELECT * FROM file_system WHERE parent = ?", -1, &stmt, 0);
@@ -270,8 +237,8 @@ void SendDir(Ptr<Interest> interest, const string& path, int mtime){
         int size = infoa.ByteSize();
         char *wireData = new char[size];
         infoa.SerializeToArray(wireData, size);
-        Name name = interest->getName();
-        name.appendVersion(mtime).append("%C1.FS.dir");
+        Name name(global_prefix + path);
+        name.append("%C1.FS.dir").appendVersion(mtime);
         Content co(wireData, size);
         Data data0;
         data0.setName(name);
@@ -280,7 +247,6 @@ void SendDir(Ptr<Interest> interest, const string& path, int mtime){
         Ptr<Blob> send_data = data0.encodeToWire();
         handler->putToCcnd(*send_data);
         delete wireData;
-        return;
     }
     else {
 #ifdef NDNFS_DEBUG
