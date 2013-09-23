@@ -56,6 +56,7 @@ int current_seg = 0;
 
 ndn::Time start;
 
+ofstream ofs("/tmp/file1", ios_base::binary | ios_base::trunc);
 
 void OnMetaData (Ptr<Data> data) {
     Blob& content = data->content();
@@ -109,7 +110,10 @@ void OnFileData (Ptr<Data> data) {
     Blob& content = data->content();
     Name& data_name = data->getName();
     cout << "Segment received: " << data_name.toUri() << endl;
-    cout << "    data: " << string((char*)content.buf(), content.size()) << endl;
+    //cout << "    data: " << string((char*)content.buf(), content.size()) << endl;
+    for (int i = 0; i < content.size(); i++) {
+        ofs << content[i];
+    }
 
     current_seg = (int)(data_name.rbegin()->toSeqNum());
     cout << current_seg << endl;
@@ -193,6 +197,8 @@ int main (int argc, char **argv) {
 	cout << "Started..." << endl;
 
 	sleep(10);
+
+    ofs.close();
 
 	return 0;
 }

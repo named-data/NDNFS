@@ -227,9 +227,7 @@ void SendDir(const string& path, int mtime) {
         ndnfs::DirInfo *info = infoa.add_di();
         info->set_type(sqlite3_column_int(stmt, 2));
         info->set_path((const char *)sqlite3_column_text(stmt, 0));
-        //delete info;
         count++;
-        //paths.push_back(string((const char *)sqlite3_column_text(stmt, 0)));
     }
     sqlite3_finalize(stmt);
     //return packet
