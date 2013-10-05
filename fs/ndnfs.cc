@@ -35,8 +35,10 @@ sqlite3 *db;
 ndn::Name signer("/ndn/ucla.edu/qiuhan");
 string ndnfs::global_prefix;
 
-ndn::Ptr<ndn::security::OSXPrivatekeyStore> privateStoragePtr = ndn::Ptr<ndn::security::OSXPrivatekeyStore>::Create();
-ndn::Ptr<ndn::security::Keychain> keychain = ndn::Ptr<ndn::security::Keychain>(new ndn::security::Keychain(privateStoragePtr, "/Users/ndn/qiuhan/policy", "/tmp/encryption.db"));
+ndn::ptr_lib::shared_ptr<ndn::OSXPrivateKeyStorage> privateStoragePtr(new ndn::OSXPrivateKeyStorage());
+#if 0 // TODO: initialize KeyChain properly.
+ndn::ptr_lib::shared_ptr<ndn::KeyChain> keychain(new ndn::KeyChain(privateStoragePtr, "/Users/ndn/qiuhan/policy", "/tmp/encryption.db"));
+#endif
 //////policy needs to be changed
 
 const int ndnfs::dir_type = 0;
@@ -75,7 +77,9 @@ struct ndnfs_config {
 
 static struct fuse_opt ndnfs_opts[] = {
     NDNFS_OPT("prefix=%s", prefix, 0),
+#if 0
     FUSE_OPT_END
+#endif
 };
 
 int main(int argc, char **argv)

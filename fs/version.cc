@@ -20,8 +20,8 @@
 
 #include "version.h"
 
-#include <ndn.cxx/data.h>
-#include <ndn.cxx/common.h>
+#include <ndn-cpp/data.hpp>
+#include <ndn-cpp/common.hpp>
 
 using namespace std;
 using namespace boost;
@@ -144,11 +144,11 @@ int write_temp_version(const char* path, const uint64_t current_ver, const uint6
                 seg_raw = (const char *)sqlite3_column_blob(stmt, 3);
                 seg_len = sqlite3_column_bytes(stmt,3 );
 		
-                Ptr<Blob> seg_blob = Create<Blob>(seg_raw, seg_len);
-                Ptr<Data> seg = Data::decodeFromWire(seg_blob);
-                const Blob& seg_content = seg->content();
+                Data seg;
+                seg.wireDecode((const uint8_t*)seg_raw, seg_len);
+                const Blob& seg_content = seg.getContent();
                 data_len = (seg_content.size() > tail) ? tail : seg_content.size();
-                data = seg_content.buf();
+                data = (const char*)seg_content.buf();
 		
                 make_segment(path, temp_ver, i, false, data, data_len);
 		    
@@ -195,12 +195,12 @@ int write_temp_version(const char* path, const uint64_t current_ver, const uint6
         const char *seg_raw = (const char *)sqlite3_column_blob(stmt, 3);
 	
         if (seg_len > 0) {
-            Ptr<Blob> seg_blob = Create<Blob>(seg_raw, seg_len);
-            Ptr<Data> seg = Data::decodeFromWire(seg_blob);
-            const Blob& seg_content = seg->content();
+            Data seg;
+            seg.wireDecode((const uint8_t*)seg_raw, seg_len);
+            const Blob& seg_content = seg.getContent();
 	    
             assert(tail <= seg_content.size());
-            const char *old_data = seg_content.buf();
+            const uint8_t *old_data = seg_content.buf();
 	    
             int copy_len = ndnfs::seg_size - tail;
             if (copy_len > size) {
@@ -317,12 +317,12 @@ int truncate_temp_version(const char* path, const uint64_t current_ver, const ui
                 seg_raw = (const char *)sqlite3_column_blob(stmt, 3);
                 seg_len = sqlite3_column_bytes(stmt, 3);
 		
-                Ptr<Blob> seg_blob = Create<Blob>(seg_raw, seg_len);
-                Ptr<Data> seg = Data::decodeFromWire(seg_blob);
-                const Blob& seg_content = seg->content();
+                Data seg;
+                seg.wireDecode((const uint8_t*)seg_raw, seg_len);
+                const Blob& seg_content = seg.getContent();
         
                 data_len = (seg_content.size() > tail) ? tail : seg_content.size();
-                data = seg_content.buf();
+                data = (const char*)seg_content.buf();
 		
                 make_segment(path, temp_ver, i, false, data, data_len);
 		

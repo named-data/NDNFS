@@ -19,11 +19,12 @@
  */
 
 #include "segment.h"
-#include <ndn.cxx/data.h>
-#include <ndn.cxx/common.h>
-#include <ndn.cxx/security/exception.h>
-
+#include <ndn-cpp/data.hpp>
+#include <ndn-cpp/common.hpp>
+#include <ndn-cpp/security/security-exception.hpp>
+#if 0
 #include <ndn.cxx/helpers/uri.h>
+#endif
 
 #include <iostream>
 #include <cstdio>
@@ -53,9 +54,9 @@ int read_segment(const char* path, const uint64_t ver, const int seg, char *outp
     co_raw = (const char*) sqlite3_column_blob(stmt, 3);
     co_size = sqlite3_column_bytes(stmt, 3);
 
-    Ptr<Blob> data_blob = Create<Blob>(co_raw, co_size);
-    Ptr<Data> data = Data::decodeFromWire(data_blob);
-    const char *content = data->content().buf();
+    Data data;
+    data.wireDecode((const uint8_t*)co_raw, co_size);
+    const uint8_t *content = data.getContent().buf();
 
 #ifdef NDNFS_DEBUG
     cout << "read_segment: raw data is " << endl;
@@ -66,7 +67,7 @@ int read_segment(const char* path, const uint64_t ver, const int seg, char *outp
     cout << "read_segment: raw data length is " << co_size << endl;
 #endif
 
-    int copy_len = data->content().size();
+    size_t copy_len = data.getContent().size();
     if (copy_len > limit)  // Don't write across the limit
         copy_len = limit;
 
@@ -96,29 +97,34 @@ int make_segment(const char* path, const uint64_t ver, const int seg, const bool
 
     string file_path(path);
     string full_name = ndnfs::global_prefix + file_path;
+#if 0
     string escaped_name;
     Uri::toEscaped(full_name.begin(), full_name.end(), back_inserter(escaped_name));
 
     Name seg_name(escaped_name);
+#else
+    Name seg_name(full_name);
+#endif
+#if 0 // TODO implement appendVersion
     seg_name.appendVersion(ver);
-    seg_name.appendSeqNum(seg);
+#endif
+    seg_name.appendSegment(seg);
 #ifdef NDNFS_DEBUG
     cout << "make_segment: segment name is " << seg_name.toUri() << endl;
 #endif
 
-    Content co(data,len);
     Data data0;
     data0.setName(seg_name);
-    data0.setContent(co);
+    data0.setContent((const uint8_t*)data, len);
     try{
         keychain->sign(data0,signer);
-    } catch(security::SecException & e) {
+    } catch(SecurityException & e) {
         cerr << e.Msg() << endl;
         cerr << data0.getName() << endl;
     }
-    Ptr<Blob> wire_data = data0.encodeToWire();
-    char* co_raw = wire_data->buf();
-    int co_size = wire_data->size();
+    SignedBlob wire_data = data0.wireEncode();
+    const char* co_raw = (const char*)wire_data.buf();
+    int co_size = wire_data.size();
 
 #ifdef NDNFS_DEBUG
     cout << "make_segment: raw data is" << endl;
@@ -196,19 +202,17 @@ void truncate_segment(const char* path, const uint64_t ver, const int seg, const
 
             assert(co_size > (int)length);
 
-            Ptr<Blob> data_blob = Create<Blob>(co_raw, co_size);
-            Ptr<Data> data = Data::decodeFromWire(data_blob);
-            const Blob& data_content = data->content();
-            const char *content = data_content.buf();
+            Data data;
+            data.wireDecode((const uint8_t*)co_raw, co_size);
+            const uint8_t *content = data.getContent().buf();
 
-            Content co(content, length);
             Data trunc_data;
-            trunc_data.setName(data->getName());
-            trunc_data.setContent(co);
+            trunc_data.setName(data.getName());
+            trunc_data.setContent(content, length);
             keychain->sign(trunc_data,signer);
-            Ptr<Blob> wire_data = trunc_data.encodeToWire();
-            char *trunc_co_raw = wire_data->buf();
-            int trunc_co_size = wire_data->size();
+            SignedBlob wire_data = trunc_data.wireEncode();
+            const uint8_t *trunc_co_raw = wire_data.buf();
+            int trunc_co_size = wire_data.size();
 
             sqlite3_finalize(stmt);
             sqlite3_prepare_v2(db, "UPDATE file_segments SET data = ? WHERE path = ? AND version = ? AND segment = ?;", -1, &stmt, 0);

@@ -19,14 +19,13 @@
 
 #include <iostream>
 
-#include <ndn.cxx/wrapper/wrapper.h>
-#include <ndn.cxx/fields/name.h>
-#include <ndn.cxx/common.h>
+#include <ndn-cpp/face.hpp>
+#include <ndn-cpp/name.hpp>
+#include <ndn-cpp/common.hpp>
 #include <boost/lexical_cast.hpp>
-#include <ndn.cxx/security/keychain.h>
-#include <ndn.cxx/security/identity/osx-privatekey-store.h>
-#include <ndn.cxx/common.h>
-#include <ndn.cxx/security/certificate/certificate.h>
+#include <ndn-cpp/security/key-chain.hpp>
+#include <ndn-cpp/security/identity/osx-private-key-storage.hpp>
+#include <ndn-cpp/security/certificate/certificate.hpp>
 #include <sqlite3.h>
 #include <boost/bind.hpp>
 #include <unistd.h>
@@ -41,14 +40,17 @@ sqlite3 *db;
 
 // create a global handler
 ndn::Name signer("/ndn/ucla.edu/qiuhan");
-Ptr<security::OSXPrivatekeyStore> privateStoragePtr = Ptr<security::OSXPrivatekeyStore>::Create();
-Ptr<security::Keychain> keychain = Ptr<security::Keychain>(new security::Keychain(privateStoragePtr, "/Users/ndn/qiuhan/policy", "/tmp/encryption.db"));//////policy needs to be changed
-Ptr<Wrapper> handler = Ptr<Wrapper>(new Wrapper(keychain));
+ptr_lib::shared_ptr<OSXPrivateKeyStorage> privateStoragePtr(new OSXPrivateKeyStorage());
+#if 0 // TODO: set up KeyChain properly.
+ptr_lib::shared_ptr<KeyChain> keychain(new security::KeyChain(privateStoragePtr, "/Users/ndn/qiuhan/policy", "/tmp/encryption.db"));//////policy needs to be changed
+#endif
+ptr_lib::shared_ptr<Transport> ndnTransport(new TcpTransport());
+ptr_lib::shared_ptr<Face> handler(new Face(ndnTransport, ptr_lib::make_shared<TcpTransport::ConnectionInfo>("localhost")));
 
 string global_prefix;
 
 void
-publishAllCert(Ptr<Wrapper> wrapper)
+publishAllCert()
 {
     cerr << "push all cert!" << endl;
     sqlite3 * fakeDB;
@@ -62,9 +64,8 @@ publishAllCert(Ptr<Wrapper> wrapper)
 
     while(sqlite3_step(stmt) == SQLITE_ROW)
     {
-        Blob dataBlob(sqlite3_column_blob(stmt, 0), sqlite3_column_bytes(stmt, 0));    
         cerr << "publish certificate" << endl;
-        wrapper->putToCcnd(dataBlob);
+        ndnTransport->send((const uint8_t*)sqlite3_column_blob(stmt, 0), sqlite3_column_bytes(stmt, 0));
     }
 
     sqlite3_close (fakeDB);
@@ -87,18 +88,16 @@ int main(int argc, char **argv) {
         }
     }
     
-    publishAllCert(handler);
+    publishAllCert();
     Name certificatedsk_name("/ndn/ucla.edu/qiuhan/DSK-1378423613/ID-CERT/1378423803");
-    Ptr<security::Certificate> certdsk = keychain->getAnyCertificate(certificatedsk_name);
-    Ptr<Blob> cert0 = certdsk->encodeToWire();
+    SignedBlob cert0 = keychain->getAnyCertificate(certificatedsk_name)->wireEncode();
     cerr << "publish DSK: " << cert0->size() << endl;
-    handler->putToCcnd(*cert0);
+    ndnTransport->send(*cert0);
 
     Name certificateksk_name("/ndn/ucla.edu/qiuhan/KSK-1378422677/ID-CERT/1378423300");
-    Ptr<security::Certificate> certksk = keychain->getAnyCertificate(certificateksk_name);
-    Ptr<Blob> cert1 = certksk->encodeToWire();
+    SignedBlob cert1 = keychain->getAnyCertificate(certificateksk_name)->wireEncode();
     cerr << "publish KSK: " << cert1->size() << endl;
-    handler->putToCcnd(*cert1);
+    ndnTransport->send(*cert1);
     
     cout << "main: open sqlite database" << endl;
 
@@ -115,7 +114,7 @@ int main(int argc, char **argv) {
     global_prefix = InterestBaseName.toUri();
     cout << "global prefix for NDNFS: " << global_prefix << endl;
 
-    handler->setInterestFilter(InterestBaseName, OnInterest);
+    handler->registerPrefix(InterestBaseName, ::OnInterest, ::OnRegisterFailed);
     while (true) {
         sleep (1);
     }

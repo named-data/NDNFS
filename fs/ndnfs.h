@@ -37,15 +37,14 @@
 #include <fuse.h>
 #include <sqlite3.h>
 
-#include <ndn.cxx/security/keychain.h>
-#include <ndn.cxx/security/identity/osx-privatekey-store.h>
-#include <ndn.cxx/common.h>
-#include <ndn.cxx/fields/name.h>
+#include <ndn-cpp/security/key-chain.hpp>
+#include <ndn-cpp/security/identity/osx-private-key-storage.hpp>
+#include <ndn-cpp/name.hpp>
 
 #include "config.h"
 
-extern ndn::Ptr<ndn::security::OSXPrivatekeyStore> privateStoragePtr;
-extern ndn::Ptr<ndn::security::Keychain> keychain;
+extern ndn::ptr_lib::shared_ptr<ndn::OSXPrivateKeyStorage> privateStoragePtr;
+extern ndn::ptr_lib::shared_ptr<ndn::KeyChain> keychain;
 extern const char *db_name;
 extern sqlite3 *db;
 

@@ -22,11 +22,11 @@
 
 #include <string>
 
-#include <ndn.cxx/wrapper/wrapper.h>
-#include <ndn.cxx/common.h>
-#include <ndn.cxx/fields/name.h>
-#include <ndn.cxx/interest.h>
-#include <ndn.cxx/security/identity/osx-privatekey-store.h>
+#include <ndn-cpp/face.hpp>
+#include <ndn-cpp/common.hpp>
+#include <ndn-cpp/name.hpp>
+#include <ndn-cpp/interest.hpp>
+#include <ndn-cpp/security/identity/osx-private-key-storage.hpp>
 #include "dir.pb.h"
 #include "file.pb.h"
 
@@ -34,14 +34,16 @@
 
 extern const char *db_name;
 extern sqlite3 *db;
-extern ndn::Ptr<ndn::security::OSXPrivatekeyStore> privateStoragePtr;
-extern ndn::Ptr<ndn::security::Keychain> keychain;
+extern ndn::ptr_lib::shared_ptr<ndn::OSXPrivateKeyStorage> privateStoragePtr;
+extern ndn::ptr_lib::shared_ptr<ndn::KeyChain> keychain;
 extern ndn::Name signer;
 
 // Global prefix for NDNFS
 extern std::string global_prefix;
 
-void OnInterest(ndn::Ptr<ndn::Interest> interest);
+void OnInterest(const ndn::ptr_lib::shared_ptr<const ndn::Name>& prefix, const ndn::ptr_lib::shared_ptr<const ndn::Interest>& interest, ndn::Transport& transport);
+
+void OnRegisterFailed(const ndn::ptr_lib::shared_ptr<const ndn::Name>& prefix);
 
 void ndnName2String(const ndn::Name& name, uint64_t &version, int &seg, std::string &path);
 
