@@ -28,21 +28,23 @@
 #include <boost/lexical_cast.hpp>
 
 #include "servermodule.h"
-#include <ndn.cxx/wrapper/wrapper.h>
-#include <ndn.cxx/common.h>
+#include <ndn-cpp/face.hpp>
+#include <ndn-cpp/interest.hpp>
+#include <ndn-cpp/security/key-chain.hpp>
+#include <ndn-cpp/common.hpp>
 
 using namespace std;
 using namespace ndn;
 using namespace boost;
 
-extern Ptr<Wrapper> handler;
+extern ptr_lib::shared_ptr<Face> handler;
 
-void OnInterest(Ptr<Interest> interest) {
+void OnInterest(const ptr_lib::shared_ptr<const Name>& prefix, const ptr_lib::shared_ptr<const Interest>& interest, Transport& transport, uint64_t registeredPrefixId) {
 #ifdef NDNFS_DEBUG
     cout << "------------------------------------------------------------" << endl;
     cout << "OnInterest(): interest name: " << interest->getName() << endl;
 #endif
-    ProcessName(interest->getName());
+    ProcessName(interest->getName(), transport);
     cout << "OnInterest(): Done" << endl;
     cout << "------------------------------------------------------------" << endl;
 }
@@ -54,21 +56,21 @@ void ndnName2String(const ndn::Name& name, uint64_t &version, int &seg, string &
     ndn::Name::const_iterator iter = name.begin();
     for (; iter != name.end(); iter++) {
 #ifdef NDNFS_DEBUG
-        cout << "ndnName2String(): interest name component: " << iter->toUri() << endl;
+        cout << "ndnName2String(): interest name component: " << iter->toEscapedString() << endl;
 #endif
-        const uint8_t marker = *(iter->buf());
+        const uint8_t marker = *(iter->getValue().buf());
         //cout << (unsigned int)marker << endl;
         if (marker == 0xFD) {
             version = iter->toVersion(); 
         }
         else if (marker == 0x00) {
-            seg = iter->toSeqNum();
+            seg = iter->toSegment();
         }
         else if (marker == 0xC1) {
             continue;
         }
         else {
-            string comp = iter->toUri();
+            string comp = iter->toEscapedString();
             oss << "/" << comp;
         }
     }
@@ -84,7 +86,7 @@ void ndnName2String(const ndn::Name& name, uint64_t &version, int &seg, string &
 #endif
 }
 
-void ProcessName(Name& interest_name) {
+void ProcessName(const Name& interest_name, Transport& transport) {
     string path;
     uint64_t version;
     int seg;
@@ -121,8 +123,7 @@ void ProcessName(Name& interest_name) {
         }
         cout << endl;
 #endif
-        ndn::Blob bin_data(data, len);
-        handler->putToCcnd(bin_data);
+        transport.send((uint8_t*)data, len);
         cout << "ProcessName(): content object returned and interest consumed" << endl;
         sqlite3_finalize(stmt);
     }
@@ -139,7 +140,7 @@ void ProcessName(Name& interest_name) {
             return;
         }
 		
-        SendFile(path, version, sqlite3_column_int(stmt,2), sqlite3_column_int(stmt,3));
+        SendFile(path, version, sqlite3_column_int(stmt,2), sqlite3_column_int(stmt,3), transport);
         sqlite3_finalize(stmt);
     }
     else if (version == -1 && seg == -1) {
@@ -172,7 +173,7 @@ void ProcessName(Name& interest_name) {
                 return;
             }
             
-            SendFile(path, version, sqlite3_column_int(stmt,2), sqlite3_column_int(stmt,3));
+            SendFile(path, version, sqlite3_column_int(stmt,2), sqlite3_column_int(stmt,3), transport);
             sqlite3_finalize(stmt);
         } else {
 #ifdef NDNFS_DEBUG
@@ -180,7 +181,7 @@ void ProcessName(Name& interest_name) {
 #endif
             int mtime = sqlite3_column_int(stmt, 5);
             sqlite3_finalize(stmt);
-            SendDir(path, mtime);
+            SendDir(path, mtime, transport);
         }
     }
 }
@@ -195,7 +196,7 @@ void ProcessName(Name& interest_name) {
   return comp1<comp2;
   }*/
 
-void SendFile(const string& path, uint64_t version, int sizef, int totalseg) {
+void SendFile(const string& path, uint64_t version, int sizef, int totalseg, Transport& transport) {
     ndnfs::FileInfo infof;
     infof.set_size(sizef);
     infof.set_totalseg(totalseg);
@@ -204,18 +205,18 @@ void SendFile(const string& path, uint64_t version, int sizef, int totalseg) {
     char *wireData = new char[size];
     infof.SerializeToArray(wireData, size);
     Name name(global_prefix + path);
+#if 0
     name.append("%C1.FS.file").appendVersion(version);
-    Content co(wireData, size);
+#endif
     Data data0;
     data0.setName(name);
-    data0.setContent(co);
-    keychain->sign(data0, signer);
-    Ptr<Blob> send_data = data0.encodeToWire();
-    handler->putToCcnd(*send_data);
+    data0.setContent((uint8_t*)wireData, size);
+    keychain->signByIdentity(data0, signer);
+    transport.send(*data0.wireEncode());
     return;
 }
 
-void SendDir(const string& path, int mtime) {
+void SendDir(const string& path, int mtime, Transport& transport) {
     //finding the relevant file recursively
     sqlite3_stmt *stmt;
     sqlite3_prepare_v2(db, "SELECT * FROM file_system WHERE parent = ?", -1, &stmt, 0);
@@ -236,14 +237,14 @@ void SendDir(const string& path, int mtime) {
         char *wireData = new char[size];
         infoa.SerializeToArray(wireData, size);
         Name name(global_prefix + path);
+#if 0
         name.append("%C1.FS.dir").appendVersion(mtime);
-        Content co(wireData, size);
+#endif
         Data data0;
         data0.setName(name);
-        data0.setContent(co);
-        keychain->sign(data0, signer);
-        Ptr<Blob> send_data = data0.encodeToWire();
-        handler->putToCcnd(*send_data);
+        data0.setContent((uint8_t*)wireData, size);
+        keychain->signByIdentity(data0, signer);
+        transport.send(*data0.wireEncode());
         delete wireData;
     }
     else {

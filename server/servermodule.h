@@ -41,17 +41,17 @@ extern ndn::Name signer;
 // Global prefix for NDNFS
 extern std::string global_prefix;
 
-void OnInterest(const ndn::ptr_lib::shared_ptr<const ndn::Name>& prefix, const ndn::ptr_lib::shared_ptr<const ndn::Interest>& interest, ndn::Transport& transport);
+void OnInterest(const ndn::ptr_lib::shared_ptr<const ndn::Name>& prefix, const ndn::ptr_lib::shared_ptr<const ndn::Interest>& interest, ndn::Transport& transport, uint64_t registeredPrefixId);
 
 void OnRegisterFailed(const ndn::ptr_lib::shared_ptr<const ndn::Name>& prefix);
 
 void ndnName2String(const ndn::Name& name, uint64_t &version, int &seg, std::string &path);
 
-void ProcessName(ndn::Name& interest_name);
+void ProcessName(const ndn::Name& interest_name, ndn::Transport& transport);
 
-void SendDir(const std::string& path, int mtime);
+void SendDir(const std::string& path, int mtime, ndn::Transport& transport);
 
 //bool CompareComponent(const std::string& a, const std::string& b);
-void SendFile(const std::string& path, uint64_t version, int sizef, int totalseg);
+void SendFile(const std::string& path, uint64_t version, int sizef, int totalseg, ndn::Transport& transport);
 
 #endif // __SERVER_MODULE_H__

@@ -117,7 +117,7 @@ int make_segment(const char* path, const uint64_t ver, const int seg, const bool
     data0.setName(seg_name);
     data0.setContent((const uint8_t*)data, len);
     try{
-        keychain->sign(data0,signer);
+        keychain->signByIdentity(data0,signer);
     } catch(SecurityException & e) {
         cerr << e.Msg() << endl;
         cerr << data0.getName() << endl;
@@ -209,7 +209,7 @@ void truncate_segment(const char* path, const uint64_t ver, const int seg, const
             Data trunc_data;
             trunc_data.setName(data.getName());
             trunc_data.setContent(content, length);
-            keychain->sign(trunc_data,signer);
+            keychain->signByIdentity(trunc_data,signer);
             SignedBlob wire_data = trunc_data.wireEncode();
             const uint8_t *trunc_co_raw = wire_data.buf();
             int trunc_co_size = wire_data.size();
