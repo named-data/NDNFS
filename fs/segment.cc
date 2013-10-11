@@ -22,9 +22,6 @@
 #include <ndn-cpp/data.hpp>
 #include <ndn-cpp/common.hpp>
 #include <ndn-cpp/security/security-exception.hpp>
-#if 0
-#include <ndn.cxx/helpers/uri.h>
-#endif
 
 #include <iostream>
 #include <cstdio>
@@ -97,17 +94,19 @@ int make_segment(const char* path, const uint64_t ver, const int seg, const bool
 
     string file_path(path);
     string full_name = ndnfs::global_prefix + file_path;
-#if 0
-    string escaped_name;
-    Uri::toEscaped(full_name.begin(), full_name.end(), back_inserter(escaped_name));
-
-    Name seg_name(escaped_name);
-#else
-    Name seg_name(full_name);
-#endif
-#if 0 // TODO implement appendVersion
+    // We want the Name(uri) constructor to split the path into components between "/", but we first need
+    // to escape the characters in full_name which the Name(uri) constructor will unescape.  So, create a component
+    // from the raw string and use its toEscapedString.
+    string escapedString = Name::Component((uint8_t*)&full_name[0], full_name.size()).toEscapedString();
+    // The "/" was escaped, so unescape.
+    while(1) {
+      size_t found = escapedString.find("%2F");
+      if (found == string::npos) break;
+      escapedString.replace(found, 3, "/");
+    }
+    Name seg_name(escapedString);
+    
     seg_name.appendVersion(ver);
-#endif
     seg_name.appendSegment(seg);
 #ifdef NDNFS_DEBUG
     cout << "make_segment: segment name is " << seg_name.toUri() << endl;
