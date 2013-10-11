@@ -25,6 +25,8 @@
 #include <boost/lexical_cast.hpp>
 #include <ndn-cpp/security/key-chain.hpp>
 #include <ndn-cpp/security/identity/osx-private-key-storage.hpp>
+#include <ndn-cpp/security/identity/basic-identity-storage.hpp>
+#include <ndn-cpp/security/policy/no-verify-policy-manager.hpp>
 #include <ndn-cpp/security/certificate/certificate.hpp>
 #include <sqlite3.h>
 #include <boost/bind.hpp>
@@ -39,11 +41,11 @@ const char *db_name = "/tmp/ndnfs.db";
 sqlite3 *db;
 
 // create a global handler
-ndn::Name signer("/ndn/ucla.edu/qiuhan");
+Name signer("/ndn/ucla.edu/qiuhan");
 ptr_lib::shared_ptr<OSXPrivateKeyStorage> privateStoragePtr(new OSXPrivateKeyStorage());
-#if 0 // TODO: set up KeyChain properly.
-ptr_lib::shared_ptr<KeyChain> keychain(new security::KeyChain(privateStoragePtr, "/Users/ndn/qiuhan/policy", "/tmp/encryption.db"));//////policy needs to be changed
-#endif
+ptr_lib::shared_ptr<KeyChain> keychain(new KeyChain
+  (ptr_lib::make_shared<IdentityManager>(ptr_lib::make_shared<BasicIdentityStorage>(), privateStoragePtr), 
+   ptr_lib::make_shared<NoVerifyPolicyManager>()));//////policy needs to be changed
 ptr_lib::shared_ptr<Transport> ndnTransport(new TcpTransport());
 ptr_lib::shared_ptr<Face> handler(new Face(ndnTransport, ptr_lib::make_shared<TcpTransport::ConnectionInfo>("localhost")));
 

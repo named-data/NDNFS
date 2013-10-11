@@ -36,9 +36,9 @@ ndn::Name signer("/ndn/ucla.edu/qiuhan");
 string ndnfs::global_prefix;
 
 ndn::ptr_lib::shared_ptr<ndn::OSXPrivateKeyStorage> privateStoragePtr(new ndn::OSXPrivateKeyStorage());
-#if 0 // TODO: initialize KeyChain properly.
-ndn::ptr_lib::shared_ptr<ndn::KeyChain> keychain(new ndn::KeyChain(privateStoragePtr, "/Users/ndn/qiuhan/policy", "/tmp/encryption.db"));
-#endif
+ndn::ptr_lib::shared_ptr<ndn::KeyChain> keychain(new ndn::KeyChain
+  (ndn::ptr_lib::make_shared<ndn::IdentityManager>(ndn::ptr_lib::make_shared<ndn::BasicIdentityStorage>(), privateStoragePtr), 
+   ndn::ptr_lib::make_shared<ndn::NoVerifyPolicyManager>()));//////policy needs to be changed
 //////policy needs to be changed
 
 const int ndnfs::dir_type = 0;
