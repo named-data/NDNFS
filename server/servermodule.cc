@@ -209,9 +209,7 @@ void SendFile(const string& path, uint64_t version, int sizef, int totalseg, Tra
     char *wireData = new char[size];
     infof.SerializeToArray(wireData, size);
     Name name(global_prefix + path);
-#if 0
     name.append("%C1.FS.file").appendVersion(version);
-#endif
     Data data0;
     data0.setName(name);
     data0.setContent((uint8_t*)wireData, size);
@@ -241,9 +239,7 @@ void SendDir(const string& path, int mtime, Transport& transport) {
         char *wireData = new char[size];
         infoa.SerializeToArray(wireData, size);
         Name name(global_prefix + path);
-#if 0
         name.append("%C1.FS.dir").appendVersion(mtime);
-#endif
         Data data0;
         data0.setName(name);
         data0.setContent((uint8_t*)wireData, size);
