@@ -49,7 +49,8 @@ def configure(conf):
 
     conf.write_config_header('config.h')
 
-    conf.check_cfg(package='libndn.cxx', args=['--cflags', '--libs'], uselib_store='NDNCXX', mandatory=True)
+    #conf.check(features='cxx cxxprogram', lib=['ndn-cpp'], cflags=['-Wall'], uselib_store='NDNCXX', mandatory=True)
+    conf.check(features='cxx cxxprogram', lib=['ndn-cpp'], cflags=['-Wall'], uselib_store='NDNCXX', mandatory=True)
 
     conf.load('boost')
     conf.check_boost(lib='system test iostreams filesystem thread')
@@ -75,20 +76,20 @@ def build (bld):
         use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD NDNCXX SQLITE3',
         includes = 'server'
         )
-    bld (
-        target = "test-client",
-        features = ["cxx", "cxxprogram"],
-        source = 'test/client.cc server/dir.proto server/file.proto',
-        use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD NDNCXX',
-        includes = 'server'
-        )
-    bld (
-        target = "cat-file",
-        features = ["cxx", "cxxprogram"],
-        source = 'test/cat_file.cc server/dir.proto server/file.proto',
-        use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD NDNCXX',
-        includes = 'server'
-        )
+#    bld (
+#        target = "test-client",
+#        features = ["cxx", "cxxprogram"],
+#        source = 'test/client.cc server/dir.proto server/file.proto',
+#        use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD NDNCXX',
+#        includes = 'server'
+#        )
+#    bld (
+#        target = "cat-file",
+#        features = ["cxx", "cxxprogram"],
+#        source = 'test/cat_file.cc server/dir.proto server/file.proto',
+#        use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD NDNCXX',
+#        includes = 'server'
+#        )
 
 @Configure.conf
 def add_supported_cxxflags(self, cxxflags):
