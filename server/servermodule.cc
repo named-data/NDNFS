@@ -49,6 +49,10 @@ void OnInterest(const ptr_lib::shared_ptr<const Name>& prefix, const ptr_lib::sh
     cout << "------------------------------------------------------------" << endl;
 }
 
+void OnRegisterFailed(const ptr_lib::shared_ptr<const Name>& prefix) {
+  
+}
+
 void ndnName2String(const ndn::Name& name, uint64_t &version, int &seg, string &path) {
     version = -1;
     seg = -1;
