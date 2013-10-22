@@ -18,14 +18,14 @@
  */
 
 
-#include <ndn.cxx/common.h>
-#include <ndn.cxx/data.h>
-#include <ndn.cxx/interest.h>
-#include <ndn.cxx/wrapper/wrapper.h>
-#include <ndn.cxx/wrapper/closure.h>
-#include <ndn.cxx/security/keychain.h>
-#include <ndn.cxx/security/identity/osx-privatekey-store.h>
-#include <boost/bind.hpp>
+#include <ndn-cpp/common.hpp>
+#include <ndn-cpp/data.hpp>
+#include <ndn-cpp/interest.hpp>
+#include <ndn-cpp/face.hpp>
+#include <ndn-cpp/security/key-chain.hpp>
+#include <ndn-cpp/security/identity/osx-private-key-storage.hpp>
+#include <ndn-cpp/security/identity/basic-identity-storage.hpp>
+#include <ndn-cpp/security/policy/no-verify-policy-manager.hpp>
 
 #include "dir.pb.h"
 #include "file.pb.h"
@@ -36,18 +36,21 @@ using namespace std;
 using namespace ndn;
 using namespace boost;
 
-Ptr<security::OSXPrivatekeyStore> privateStoragePtr = Ptr<security::OSXPrivatekeyStore>::Create();
-Ptr<security::Keychain> keychain = Ptr<security::Keychain>(new security::Keychain(privateStoragePtr, "/Users/ndn/qiuhan/policy", "/tmp/encryption.db"));
-Ptr<Wrapper> handler = Ptr<Wrapper>(new Wrapper(keychain));
+ptr_lib::shared_ptr<OSXPrivateKeyStorage> privateStoragePtr(new OSXPrivateKeyStorage());
+ptr_lib::shared_ptr<KeyChain> keychain(new KeyChain
+  (ptr_lib::make_shared<IdentityManager>(ptr_lib::make_shared<BasicIdentityStorage>(), privateStoragePtr), 
+   ptr_lib::make_shared<NoVerifyPolicyManager>()));//////policy needs to be changed
+ptr_lib::shared_ptr<Transport> ndnTransport(new TcpTransport());
+ptr_lib::shared_ptr<Face> handler(new Face(ndnTransport, ptr_lib::make_shared<TcpTransport::ConnectionInfo>("localhost")));
 
-void OnData(Ptr<Data> data);
-void OnTimeout(Ptr<Closure> closure, Ptr<Interest> origInterest);
+void onData(const ptr_lib::shared_ptr<const Interest>&, const ptr_lib::shared_ptr<Data>&);
+void onTimeout(const ptr_lib::shared_ptr<const Interest>&);
 
-void OnData(Ptr<Data> data) {
-    Blob& content = data->content();
-    Name& data_name = data->getName();
-    name::Component& comp = data_name.get(data_name.size() - 2);
-    string marker = comp.toUri();
+void onData(const ptr_lib::shared_ptr<const Interest>&interest, const ptr_lib::shared_ptr<Data>&data) {
+    const Blob& content = data->getContent();
+    const Name& data_name = data->getName();
+    const Name::Component& comp = data_name.get(data_name.size() - 2);
+    string marker = comp.toEscapedString();
     if(marker == "%C1.FS.dir"){
         ndnfs::DirInfoArray infoa;
         if(infoa.ParseFromArray(content.buf(),content.size()) && infoa.IsInitialized()){
@@ -83,10 +86,10 @@ void OnData(Ptr<Data> data) {
         cout << "data: " << string((char*)content.buf(), content.size()) << endl;
 }
 
-void OnTimeout(Ptr<Closure> closure, Ptr<Interest> origInterest) {
+void onTimeout(const ptr_lib::shared_ptr<const Interest>& origInterest) {
     // re-express interest
     cout << "TIME OUT :(" << endl;
-    handler->sendInterest(origInterest, closure);
+    handler->expressInterest(*origInterest, onData, onTimeout);
 }
 
 void Usage() {
@@ -94,15 +97,9 @@ void Usage() {
     exit(1);
 }
 
-void verifiedError(Ptr<Interest> interest)
-{
-    cout << "unverified" << endl;
-}
-
-
 int main (int argc, char **argv) {
-    Ptr<Interest> interestPtr = Ptr<Interest>(new Interest());
-    interestPtr->setScope(Interest::SCOPE_LOCAL_HOST);
+    ptr_lib::shared_ptr<Interest> interestPtr(new Interest());
+    interestPtr->setScope(ndn_Interest_ANSWER_CONTENT_STORE);
     //interestPtr->setAnswerOriginKind(0);
 
     const char* name = NULL;
@@ -121,13 +118,7 @@ int main (int argc, char **argv) {
         }
     }
 
-    Ptr<Closure> closure = Ptr<Closure> (new Closure(boost::bind(OnData, _1),
-                                                     boost::bind(OnTimeout, _1, _2),
-                                                     boost::bind(verifiedError, _1),
-                                                     Closure::UnverifiedDataCallback()
-                                             )
-        );
-    handler->sendInterest(interestPtr, closure);
+    handler->expressInterest(*interestPtr, onData, onTimeout);
     cout << "Interest sent" << endl;
 
     sleep(3);
