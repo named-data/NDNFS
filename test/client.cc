@@ -121,8 +121,10 @@ int main (int argc, char **argv) {
     handler->expressInterest(*interestPtr, onData, onTimeout);
     cout << "Interest sent" << endl;
 
-    sleep(3);
-
+    while (true) {
+        handler->processEvents();
+        usleep (10000);
+    }
 
     return 0;
 }
