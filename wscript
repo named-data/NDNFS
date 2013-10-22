@@ -76,13 +76,13 @@ def build (bld):
         use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD NDNCXX SQLITE3',
         includes = 'server'
         )
-#    bld (
-#        target = "test-client",
-#        features = ["cxx", "cxxprogram"],
-#        source = 'test/client.cc server/dir.proto server/file.proto',
-#        use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD NDNCXX',
-#        includes = 'server'
-#        )
+    bld (
+        target = "test-client",
+        features = ["cxx", "cxxprogram"],
+        source = 'test/client.cc server/dir.proto server/file.proto',
+        use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD NDNCXX',
+        includes = 'server'
+        )
 #    bld (
 #        target = "cat-file",
 #        features = ["cxx", "cxxprogram"],
