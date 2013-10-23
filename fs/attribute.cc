@@ -72,22 +72,14 @@ int ndnfs_chmod(const char *path, mode_t mode)
     cout << "ndnfs_chmod: path=" << path << ", change mode to " << std::oct << mode << endl;
 #endif
     
-    int ret = 0;
     sqlite3_stmt *stmt;
     sqlite3_prepare_v2(db, "UPDATE file_system SET mode = ? WHERE path = ?;", -1, &stmt, 0);
     sqlite3_bind_int(stmt, 1, mode);
     sqlite3_bind_text(stmt, 2, path, -1, SQLITE_STATIC);
-    if (sqlite3_step(stmt) == SQLITE_OK) {
-	if (sqlite3_changes(db) == 0)
-	    ret = -ENOENT;
-	else 
-	    ret = 0;
-    } else 
-	ret = -ENOENT;
-
+    sqlite3_step(stmt);
     sqlite3_finalize(stmt);
 
-    return ret;
+    return 0;
 }
 
 

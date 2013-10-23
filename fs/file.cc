@@ -339,7 +339,7 @@ int ndnfs_release(const char *path, struct fuse_file_info *fi)
 	
         sqlite3_prepare_v2(db, "SELECT * FROM file_versions WHERE path = ? AND version = ?;", -1, &stmt, 0);
         sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
-        sqlite3_bind_int64(stmt, 2, temp_ver);
+        sqlite3_bind_int(stmt, 2, temp_ver);
         int res = sqlite3_step(stmt);
 
         if (res != SQLITE_ROW) {

@@ -79,6 +79,43 @@ int read_version(const char *path, const int ver, char *output, size_t size, off
 }
 
 
+////////////////////////////////////////////////////////
+// Caution: the following function does the hack to 
+// add "final block id" to the first segment of file 
+// data. It is so hacky that the author does not even
+// bother to write any comment for it.
+////////////////////////////////////////////////////////
+void update_fbi (const char *path, const int ver, int fbi)
+{
+    sqlite3_stmt *stmt;
+    sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ? AND version = ? AND segment = ?", -1, &stmt, 0);
+    sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
+    sqlite3_bind_int(stmt, 2, ver);
+    sqlite3_bind_int(stmt, 3, 0);
+    if (sqlite3_step(stmt) != SQLITE_ROW) {
+        sqlite3_finalize(stmt);
+        return;
+    }
+    const char * data = (const char *)sqlite3_column_blob(stmt, 3);
+    int len = sqlite3_column_bytes(stmt, 3);
+    Data seg;
+    seg.wireDecode((const uint8_t*)data, len);
+    seg.getMetaInfo().setFinalBlockID(Name().appendSegment(fbi).get(0).getValue());
+    keychain->signByIdentity(seg,signer);
+    SignedBlob wire_data = seg.wireEncode();
+    const char* co_raw = (const char*)wire_data.buf();
+    int co_size = wire_data.size();
+    sqlite3_finalize(stmt);
+    sqlite3_prepare_v2(db, "UPDATE file_segments SET data = ? WHERE path = ? AND version = ?  AND segment = ?;", -1, &stmt, 0);
+    sqlite3_bind_text(stmt,2,path,-1,SQLITE_STATIC);
+    sqlite3_bind_int(stmt,3,ver);
+    sqlite3_bind_int(stmt,4,0);
+    sqlite3_bind_blob(stmt,1,co_raw,co_size,SQLITE_STATIC);
+    sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+}
+
+
 int write_temp_version(const char* path, const int current_ver, const int temp_ver, const char *buf, size_t size, off_t offset)
 {
 #ifdef NDNFS_DEBUG
@@ -244,6 +281,8 @@ int write_temp_version(const char* path, const int current_ver, const int temp_v
     }
 
 out:
+    update_fbi (path, temp_ver, seg_off - 1);
+
     // Remove old segments after seg_off
     remove_segments(path, temp_ver, seg_off);
 
@@ -332,6 +371,8 @@ int truncate_temp_version(const char* path, const int current_ver, const int tem
             total_segment = i;
             assert(i <= seg_off);
         }
+
+        update_fbi (path, temp_ver, total_segment - 1);
 	
         sqlite3_finalize(stmt);
         sqlite3_prepare_v2(db, "INSERT INTO file_versions (path, version, size, totalSegments) VALUES (?,?,?,?);", -1, &stmt, 0);
@@ -364,6 +405,9 @@ int truncate_temp_version(const char* path, const int current_ver, const int tem
             return -1;
         }
         sqlite3_finalize(stmt);
+        
+        update_fbi (path, temp_ver, seg_end);
+
         // Update version size and segment list
         int tail = length - segment_to_size(seg_end);
         truncate_segment(path, temp_ver, seg_end, tail);
