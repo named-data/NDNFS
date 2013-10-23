@@ -24,19 +24,13 @@
 #include "ndnfs.h"
 #include "segment.h"
 
-inline uint64_t generate_version() {
-    struct timeval tv;
-    gettimeofday(&tv,NULL);
-    return (uint64_t)(tv.tv_sec * (uint64_t)1000000 + tv.tv_usec);
-}
+int read_version(const char* path, const int version, char *output, size_t size, off_t offset);
 
-int read_version(const char* path, const uint64_t version, char *output, size_t size, off_t offset);
+int write_temp_version(const char* path, const int current_ver, const int temp_ver, const char *buf, size_t size, off_t offset);
 
-int write_temp_version(const char* path, const uint64_t current_ver, const uint64_t temp_ver, const char *buf, size_t size, off_t offset);
+int truncate_temp_version(const char* path, const int current_ver, const int temp_ver, off_t length);
 
-int truncate_temp_version(const char* path, const uint64_t current_ver, const uint64_t temp_ver, off_t length);
-
-void remove_version(const char* path, const uint64_t version);
+void remove_version(const char* path, const int version);
 
 void remove_versions(const char* path);
 

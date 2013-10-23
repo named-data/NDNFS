@@ -27,7 +27,7 @@ using namespace std;
 using namespace boost;
 using namespace ndn;
 
-int read_version(const char *path, const uint64_t ver, char *output, size_t size, off_t offset)
+int read_version(const char *path, const int ver, char *output, size_t size, off_t offset)
 {
 #ifdef NDNFS_DEBUG
     cout << "read_version: path=" << path << std::dec << ", ver=" << ver << ", size=" << size << ", offset=" << offset << endl;
@@ -36,7 +36,7 @@ int read_version(const char *path, const uint64_t ver, char *output, size_t size
     sqlite3_stmt *stmt;
     sqlite3_prepare_v2(db, "SELECT * FROM file_versions WHERE path = ? AND version = ?;", -1, &stmt, 0);
     sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
-    sqlite3_bind_int64(stmt, 2, ver);
+    sqlite3_bind_int(stmt, 2, ver);
 
     int res = sqlite3_step(stmt);
     if (res != SQLITE_ROW) {
@@ -79,7 +79,7 @@ int read_version(const char *path, const uint64_t ver, char *output, size_t size
 }
 
 
-int write_temp_version(const char* path, const uint64_t current_ver, const uint64_t temp_ver, const char *buf, size_t size, off_t offset)
+int write_temp_version(const char* path, const int current_ver, const int temp_ver, const char *buf, size_t size, off_t offset)
 {
 #ifdef NDNFS_DEBUG
     cout << "write_temp_version: path=" << path << std::dec << ", curr_ver=" << current_ver << ", temp_ver=" << temp_ver << ", size=" << size << ", offset=" << offset << endl;
@@ -95,7 +95,7 @@ int write_temp_version(const char* path, const uint64_t current_ver, const uint6
     sqlite3_stmt *stmt;
     sqlite3_prepare_v2(db, "SELECT * FROM file_versions WHERE path = ? AND version = ?;", -1, &stmt, 0);
     sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
-    sqlite3_bind_int64(stmt, 2, temp_ver);
+    sqlite3_bind_int(stmt, 2, temp_ver);
     
     if (sqlite3_step(stmt) != SQLITE_ROW) {
 #ifdef NDNFS_DEBUG
@@ -110,7 +110,7 @@ int write_temp_version(const char* path, const uint64_t current_ver, const uint6
             // Copy data from current version 
             sqlite3_finalize(stmt);
             sqlite3_prepare_v2(db, "SELECT * FROM file_versions WHERE path = ? AND version = ?;", -1, &stmt, 0);
-            sqlite3_bind_int64(stmt,2, current_ver);
+            sqlite3_bind_int(stmt,2, current_ver);
             sqlite3_bind_text(stmt, 1,path, -1, SQLITE_STATIC);
             if (sqlite3_step(stmt) != SQLITE_ROW){
                 sqlite3_finalize(stmt);
@@ -134,7 +134,7 @@ int write_temp_version(const char* path, const uint64_t current_ver, const uint6
                 sqlite3_finalize(stmt);
                 sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ? AND version = ? AND segment = ?;", -1, &stmt, 0);
                 sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
-                sqlite3_bind_int64(stmt, 2, current_ver);
+                sqlite3_bind_int(stmt, 2, current_ver);
                 sqlite3_bind_int(stmt, 3, i);
                 if(sqlite3_step(stmt) != SQLITE_ROW){
                     sqlite3_finalize(stmt);
@@ -163,7 +163,7 @@ int write_temp_version(const char* path, const uint64_t current_ver, const uint6
         sqlite3_finalize(stmt);
         sqlite3_prepare_v2(db, "INSERT INTO file_versions (path, version, size, totalSegments) VALUES (?,?,?,?);", -1, &stmt, 0);
         sqlite3_bind_text(stmt,1,path,-1,SQLITE_STATIC);
-        sqlite3_bind_int64(stmt,2,temp_ver);
+        sqlite3_bind_int(stmt,2,temp_ver);
         sqlite3_bind_int(stmt,3,offset);
         sqlite3_bind_int(stmt,4,total_segment);
         int res = sqlite3_step(stmt);
@@ -184,7 +184,7 @@ int write_temp_version(const char* path, const uint64_t current_ver, const uint6
         sqlite3_finalize(stmt);
         sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ? AND version = ? AND segment = ?;", -1, &stmt, 0);
         sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
-        sqlite3_bind_int64(stmt, 2, temp_ver);
+        sqlite3_bind_int(stmt, 2, temp_ver);
         sqlite3_bind_int(stmt, 3, seg_off);
         if (sqlite3_step(stmt) != SQLITE_ROW) {
             sqlite3_finalize(stmt);
@@ -253,7 +253,7 @@ out:
     sqlite3_bind_int(stmt, 1, (int)(offset+size));
     sqlite3_bind_int(stmt, 2, seg_off);
     sqlite3_bind_text(stmt, 3, path, -1, SQLITE_STATIC);
-    sqlite3_bind_int64(stmt, 4, temp_ver);
+    sqlite3_bind_int(stmt, 4, temp_ver);
     int res = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
     if (res != SQLITE_OK && res != SQLITE_DONE)
@@ -263,7 +263,7 @@ out:
 }
 
 
-int truncate_temp_version(const char* path, const uint64_t current_ver, const uint64_t temp_ver, off_t length)
+int truncate_temp_version(const char* path, const int current_ver, const int temp_ver, off_t length)
 {
 #ifdef NDNFS_DEBUG
     cout << "truncate_temp_version: path=" << path << std::dec << ", curr_ver=" << current_ver << ", temp_ver=" << temp_ver << ", length=" << length << endl;
@@ -274,7 +274,7 @@ int truncate_temp_version(const char* path, const uint64_t current_ver, const ui
     sqlite3_stmt *stmt;
     sqlite3_prepare_v2(db, "SELECT * FROM file_versions WHERE path = ? AND version = ?;", -1, &stmt, 0);
     sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
-    sqlite3_bind_int64(stmt, 2, temp_ver);
+    sqlite3_bind_int(stmt, 2, temp_ver);
 
     if(sqlite3_step(stmt) != SQLITE_ROW){
         // *copy-on-write* strategy:
@@ -287,7 +287,7 @@ int truncate_temp_version(const char* path, const uint64_t current_ver, const ui
             sqlite3_finalize(stmt);
             sqlite3_prepare_v2(db, "SELECT * FROM file_versions WHERE path = ? AND version = ?;", -1, &stmt, 0);
             sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
-            sqlite3_bind_int64(stmt, 2, current_ver);
+            sqlite3_bind_int(stmt, 2, current_ver);
             if (sqlite3_step(stmt) != SQLITE_ROW){
                 return -1;
             }
@@ -308,7 +308,7 @@ int truncate_temp_version(const char* path, const uint64_t current_ver, const ui
                 sqlite3_finalize(stmt);
                 sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ? AND version = ? AND segment = ?;", -1, &stmt, 0);
                 sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
-                sqlite3_bind_int64(stmt, 2, current_ver);
+                sqlite3_bind_int(stmt, 2, current_ver);
                 sqlite3_bind_int(stmt, 3, i);
                 if(sqlite3_step(stmt) != SQLITE_ROW){
                     return -1;
@@ -336,7 +336,7 @@ int truncate_temp_version(const char* path, const uint64_t current_ver, const ui
         sqlite3_finalize(stmt);
         sqlite3_prepare_v2(db, "INSERT INTO file_versions (path, version, size, totalSegments) VALUES (?,?,?,?);", -1, &stmt, 0);
         sqlite3_bind_text(stmt,1,path,-1,SQLITE_STATIC);
-        sqlite3_bind_int64(stmt,2,temp_ver);
+        sqlite3_bind_int(stmt,2,temp_ver);
         sqlite3_bind_int(stmt,3,length);
         sqlite3_bind_int(stmt,4,total_segment);
         int res = sqlite3_step(stmt);
@@ -359,7 +359,7 @@ int truncate_temp_version(const char* path, const uint64_t current_ver, const ui
         sqlite3_bind_int(stmt,1,(int)(length));
         sqlite3_bind_int(stmt, 2, seg_end);
         sqlite3_bind_text(stmt, 3, path, -1, SQLITE_STATIC);
-        sqlite3_bind_int64(stmt, 4, temp_ver);
+        sqlite3_bind_int(stmt, 4, temp_ver);
         if (sqlite3_step(stmt) != SQLITE_ROW){
             return -1;
         }
@@ -377,7 +377,7 @@ int truncate_temp_version(const char* path, const uint64_t current_ver, const ui
 }
 
 
-void remove_version(const char* path, const uint64_t ver)
+void remove_version(const char* path, const int ver)
 {
 #ifdef NDNFS_DEBUG
     cout << "remove_version: path=" << path << ", ver=" << std::dec << ver << endl;
@@ -387,7 +387,7 @@ void remove_version(const char* path, const uint64_t ver)
     sqlite3_stmt *stmt;
     sqlite3_prepare_v2(db, "DELETE FROM file_versions WHERE path = ? and version = ?;", -1, &stmt, 0);
     sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
-    sqlite3_bind_int64(stmt, 2, ver);
+    sqlite3_bind_int(stmt, 2, ver);
     sqlite3_step(stmt);
     sqlite3_finalize(stmt);
 }
@@ -404,12 +404,12 @@ void remove_versions(const char* path)
     sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
     int res = sqlite3_step(stmt);
     if(res == SQLITE_ROW){
-        uint64_t curr_ver = sqlite3_column_int64(stmt, 0);
+        int curr_ver = sqlite3_column_int(stmt, 0);
         if (curr_ver != -1) {
             remove_version(path, curr_ver);
         }
 
-        uint64_t tmp_ver = sqlite3_column_int64(stmt, 1);
+        int tmp_ver = sqlite3_column_int(stmt, 1);
         if (tmp_ver != -1) {
             remove_version(path, tmp_ver);
         }

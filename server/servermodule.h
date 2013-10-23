@@ -35,7 +35,7 @@
 
 extern const char *db_name;
 extern sqlite3 *db;
-#if 0
+#if 1
 extern ndn::ptr_lib::shared_ptr<ndn::OSXPrivateKeyStorage> privateStoragePtr;
 #else
 extern ndn::ptr_lib::shared_ptr<ndn::MemoryPrivateKeyStorage> privateStoragePtr;
@@ -50,13 +50,12 @@ void OnInterest(const ndn::ptr_lib::shared_ptr<const ndn::Name>& prefix, const n
 
 void OnRegisterFailed(const ndn::ptr_lib::shared_ptr<const ndn::Name>& prefix);
 
-void ndnName2String(const ndn::Name& name, uint64_t &version, int &seg, std::string &path);
+void ndnName2String(const ndn::Name& name, int &version, int &seg, std::string &path);
 
 void ProcessName(const ndn::Name& interest_name, ndn::Transport& transport);
 
 void SendDir(const std::string& path, int mtime, ndn::Transport& transport);
 
-//bool CompareComponent(const std::string& a, const std::string& b);
-void SendFile(const std::string& path, uint64_t version, int sizef, int totalseg, ndn::Transport& transport);
+void SendFile(const std::string& path, int version, int sizef, int totalseg, ndn::Transport& transport);
 
 #endif // __SERVER_MODULE_H__

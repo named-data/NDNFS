@@ -39,12 +39,14 @@ using namespace boost;
 ptr_lib::shared_ptr<OSXPrivateKeyStorage> privateStoragePtr(new OSXPrivateKeyStorage());
 ptr_lib::shared_ptr<KeyChain> keychain(new KeyChain
   (ptr_lib::make_shared<IdentityManager>(ptr_lib::make_shared<BasicIdentityStorage>(), privateStoragePtr), 
-   ptr_lib::make_shared<NoVerifyPolicyManager>()));//////policy needs to be changed
+   ptr_lib::make_shared<NoVerifyPolicyManager>()));
 ptr_lib::shared_ptr<Transport> ndnTransport(new TcpTransport());
 ptr_lib::shared_ptr<Face> handler(new Face(ndnTransport, ptr_lib::make_shared<TcpTransport::ConnectionInfo>("localhost")));
 
 void onData(const ptr_lib::shared_ptr<const Interest>&, const ptr_lib::shared_ptr<Data>&);
 void onTimeout(const ptr_lib::shared_ptr<const Interest>&);
+
+bool done = false;
 
 void onData(const ptr_lib::shared_ptr<const Interest>&interest, const ptr_lib::shared_ptr<Data>&data) {
     const Blob& content = data->getContent();
@@ -84,6 +86,8 @@ void onData(const ptr_lib::shared_ptr<const Interest>&interest, const ptr_lib::s
     }
     else
         cout << "data: " << string((char*)content.buf(), content.size()) << endl;
+
+    done = true;
 }
 
 void onTimeout(const ptr_lib::shared_ptr<const Interest>& origInterest) {
@@ -121,7 +125,7 @@ int main (int argc, char **argv) {
     handler->expressInterest(*interestPtr, onData, onTimeout);
     cout << "Interest sent" << endl;
 
-    while (true) {
+    while (!done) {
         handler->processEvents();
         usleep (10000);
     }

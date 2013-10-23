@@ -30,7 +30,7 @@ using namespace std;
 using namespace boost;
 using namespace ndn;
 
-int read_segment(const char* path, const uint64_t ver, const int seg, char *output, const int limit, const int offset)
+int read_segment(const char* path, const int ver, const int seg, char *output, const int limit, const int offset)
 {
 #ifdef NDNFS_DEBUG
     cout << "read_segment: path=" << path << std::dec << ", ver=" << ver << ", seg=" << seg << ", limit=" << limit << ", offset=" << offset << endl;
@@ -41,7 +41,7 @@ int read_segment(const char* path, const uint64_t ver, const int seg, char *outp
     sqlite3_stmt *stmt;
     sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ? AND version = ? AND segment = ?;", -1, &stmt, 0);
     sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
-    sqlite3_bind_int64(stmt, 2, ver);
+    sqlite3_bind_int(stmt, 2, ver);
     sqlite3_bind_int(stmt, 3, seg);
     if (sqlite3_step(stmt) != SQLITE_ROW) {
         sqlite3_finalize(stmt);
@@ -84,7 +84,7 @@ int read_segment(const char* path, const uint64_t ver, const int seg, char *outp
 }
 
 
-int make_segment(const char* path, const uint64_t ver, const int seg, const bool final, const char *data, const int len)
+int make_segment(const char* path, const int ver, const int seg, const bool final, const char *data, const int len)
 {
 #ifdef NDNFS_DEBUG
     cout << "make_segment: path=" << path << std::dec << ", ver=" << ver << ", seg=" << seg << ", len=" << len << endl;
@@ -137,7 +137,7 @@ int make_segment(const char* path, const uint64_t ver, const int seg, const bool
     sqlite3_stmt *stmt;
     sqlite3_prepare_v2(db, "INSERT INTO file_segments (path,version,segment,data,offset) VALUES (?,?,?,?,?);", -1, &stmt, 0);
     sqlite3_bind_text(stmt,1,path,-1,SQLITE_STATIC);
-    sqlite3_bind_int64(stmt,2,ver);
+    sqlite3_bind_int(stmt,2,ver);
     sqlite3_bind_int(stmt,3,seg);
     sqlite3_bind_blob(stmt,4,co_raw,co_size,SQLITE_STATIC);
     sqlite3_bind_int(stmt,5,segment_to_size(seg));
@@ -147,7 +147,7 @@ int make_segment(const char* path, const uint64_t ver, const int seg, const bool
     return 0;
 }
 
-void remove_segments(const char* path, const uint64_t ver, const int start/* = 0 */)
+void remove_segments(const char* path, const int ver, const int start/* = 0 */)
 {
 #ifdef NDNFS_DEBUG
     cout << "remove_segments: path=" << path << std::dec << ", ver=" << ver << ", from segment #" << start << endl;
@@ -156,7 +156,7 @@ void remove_segments(const char* path, const uint64_t ver, const int start/* = 0
     sqlite3_stmt *stmt;
     sqlite3_prepare_v2(db, "SELECT totalSegments FROM file_versions WHERE path = ? AND version = ?;", -1, &stmt, 0);
     sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
-    sqlite3_bind_int64(stmt, 2, ver);
+    sqlite3_bind_int(stmt, 2, ver);
     int res = sqlite3_step(stmt);
     if (res != SQLITE_ROW) {
         sqlite3_finalize(stmt);
@@ -168,14 +168,14 @@ void remove_segments(const char* path, const uint64_t ver, const int start/* = 0
     for (int i = start; i < segs; i++) {
         sqlite3_prepare_v2(db, "DELETE FROM file_segments WHERE path = ? AND version = ? AND segment = ?;", -1, &stmt, 0);
         sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
-        sqlite3_bind_int64(stmt, 2, ver);
+        sqlite3_bind_int(stmt, 2, ver);
         sqlite3_bind_int(stmt, 3, i);
         sqlite3_step(stmt);
         sqlite3_finalize(stmt);
     }
 }
 
-void truncate_segment(const char* path, const uint64_t ver, const int seg, const off_t length)
+void truncate_segment(const char* path, const int ver, const int seg, const off_t length)
 {
 #ifdef NDNFS_DEBUG
     cout << "truncate_segment: path=" << path << std::dec << ", ver=" << ver << ", seg=" << seg << ", length=" << length << endl;
@@ -184,14 +184,14 @@ void truncate_segment(const char* path, const uint64_t ver, const int seg, const
     sqlite3_stmt *stmt;
     sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ? AND version = ? AND segment = ?;", -1, &stmt, 0);
     sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
-    sqlite3_bind_int64(stmt, 2, ver);
+    sqlite3_bind_int(stmt, 2, ver);
     sqlite3_bind_int(stmt, 3, seg);
     if(sqlite3_step(stmt) == SQLITE_ROW) {
         if (length == 0) {
             sqlite3_finalize(stmt);
             sqlite3_prepare_v2(db, "DELETE FROM file_segments WHERE path = ? AND version = ? AND segment = ?;", -1, &stmt, 0);
             sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
-            sqlite3_bind_int64(stmt, 2, ver);
+            sqlite3_bind_int(stmt, 2, ver);
             sqlite3_bind_int(stmt, 3, seg);
             sqlite3_step(stmt);
             sqlite3_finalize(stmt);
@@ -217,7 +217,7 @@ void truncate_segment(const char* path, const uint64_t ver, const int seg, const
             sqlite3_prepare_v2(db, "UPDATE file_segments SET data = ? WHERE path = ? AND version = ? AND segment = ?;", -1, &stmt, 0);
             sqlite3_bind_blob(stmt, 1, trunc_co_raw, trunc_co_size, SQLITE_STATIC);
             sqlite3_bind_text(stmt, 2, path, -1, SQLITE_STATIC);
-            sqlite3_bind_int64(stmt, 3, ver);
+            sqlite3_bind_int(stmt, 3, ver);
             sqlite3_bind_int(stmt, 4, seg);
             sqlite3_step(stmt);
             sqlite3_finalize(stmt);

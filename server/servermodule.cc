@@ -45,15 +45,17 @@ void OnInterest(const ptr_lib::shared_ptr<const Name>& prefix, const ptr_lib::sh
     cout << "OnInterest(): interest name: " << interest->getName() << endl;
 #endif
     ProcessName(interest->getName(), transport);
+#ifdef NDNFS_DEBUG
     cout << "OnInterest(): Done" << endl;
     cout << "------------------------------------------------------------" << endl;
+#endif
 }
 
 void OnRegisterFailed(const ptr_lib::shared_ptr<const Name>& prefix) {
   
 }
 
-void ndnName2String(const ndn::Name& name, uint64_t &version, int &seg, string &path) {
+void ndnName2String(const ndn::Name& name, int &version, int &seg, string &path) {
     version = -1;
     seg = -1;
     ostringstream oss;
@@ -92,17 +94,17 @@ void ndnName2String(const ndn::Name& name, uint64_t &version, int &seg, string &
 
 void ProcessName(const Name& interest_name, Transport& transport) {
     string path;
-    uint64_t version;
+    int version;
     int seg;
     ndnName2String(interest_name, version, seg, path);
 #ifdef NDNFS_DEBUG
-    cout << "ProcessName(): version=" << (int64_t)version << ", segment=" << seg << ", path=" << path << endl;
+    cout << "ProcessName(): version=" << version << ", segment=" << seg << ", path=" << path << endl;
 #endif
     if(version != -1 && seg != -1){
         sqlite3_stmt *stmt;
         sqlite3_prepare_v2(db, "SELECT * FROM file_segments WHERE path = ? AND version = ? AND segment = ?", -1, &stmt, 0);
         sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_int64(stmt, 2, version);
+        sqlite3_bind_int(stmt, 2, version);
         sqlite3_bind_int(stmt, 3, seg);
         if(sqlite3_step(stmt) != SQLITE_ROW){
 #ifdef NDNFS_DEBUG
@@ -135,7 +137,7 @@ void ProcessName(const Name& interest_name, Transport& transport) {
         sqlite3_stmt *stmt;
         sqlite3_prepare_v2(db, "SELECT * FROM file_versions WHERE path = ? AND version = ? ", -1, &stmt, 0);
         sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_int64(stmt, 2, version);
+        sqlite3_bind_int(stmt, 2, version);
         if(sqlite3_step(stmt) != SQLITE_ROW){
 #ifdef NDNFS_DEBUG
             cout << "ProcessName(): no such file/directory found in ndnfs: " << path << endl;
@@ -164,11 +166,11 @@ void ProcessName(const Name& interest_name, Transport& transport) {
 #ifdef NDNFS_DEBUG
             cout << "ProcessName(): found file: " << path << endl;
 #endif
-            version = sqlite3_column_int64(stmt, 7);
+            version = sqlite3_column_int(stmt, 7);
             sqlite3_finalize(stmt);
             sqlite3_prepare_v2(db, "SELECT * FROM file_versions WHERE path = ? AND version = ? ", -1, &stmt, 0);
             sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_STATIC);
-            sqlite3_bind_int64(stmt, 2, version);
+            sqlite3_bind_int(stmt, 2, version);
             if(sqlite3_step(stmt) != SQLITE_ROW){
 #ifdef NDNFS_DEBUG
                 cout << "ProcessName(): no such file version found in ndnfs: " << path << endl;
@@ -190,17 +192,7 @@ void ProcessName(const Name& interest_name, Transport& transport) {
     }
 }
 
-/*bool CompareComponent(const string& a, const string& b){
-  ndn::Name path1(a);
-  ndn::Name path2(b);
-  int len1 = path1.size();
-  int len2 = path2.size();
-  ndn::name::Component& comp1 = path1.get(len1 - 1);
-  ndn::name::Component& comp2 = path2.get(len2 - 1);
-  return comp1<comp2;
-  }*/
-
-void SendFile(const string& path, uint64_t version, int sizef, int totalseg, Transport& transport) {
+void SendFile(const string& path, int version, int sizef, int totalseg, Transport& transport) {
     ndnfs::FileInfo infof;
     infof.set_size(sizef);
     infof.set_totalseg(totalseg);
@@ -256,48 +248,3 @@ void SendDir(const string& path, int mtime, Transport& transport) {
     }
     return;
 }
-
-/*
-  bool CheckSuffix(Ptr<Interest> interest, string path) {
-  #ifdef NDNFS_DEBUG
-  cout << "CheckSuffix(): checking min/maxSuffixComponents" << endl;
-  #endif
-  // min/max suffix components
-  uint32_t min_suffix_components = interest->getMinSuffixComponents();
-  uint32_t max_suffix_components = interest->getMaxSuffixComponents();
-  #ifdef NDNFS_DEBUG
-  cout << "CheckSuffix(): MinSuffixComponents set to: " << min_suffix_components << endl;
-  cout << "CheckSuffix(): MaxSuffixComponents set to: " << max_suffix_components << endl;
-  #endif
-
-  // do suffix components check
-  uint32_t prefix_len = interest->getName().size();
-  string match = global_prefix + path;
-  uint32_t match_len = ndn::Name(match).size() + 2;
-  // digest considered one component implicitly
-  uint32_t suffix_len = match_len - prefix_len + 1;
-  if (max_suffix_components != ndn::Interest::ncomps &&
-  suffix_len > max_suffix_components) {
-  #ifdef NDNFS_DEBUG
-  cout << "CheckSuffix(): max suffix mismatch" << endl;
-  #endif
-  return false;
-  }
-  if (min_suffix_components != ndn::Interest::ncomps &&
-  suffix_len < min_suffix_components) {
-  #ifdef NDNFS_DEBUG
-  cout << "CheckSuffix(): min suffix mismatch" << endl;
-  #endif
-  return false;
-  }
-
-  return true;
-  }
-*/
-
-// TODO: publisherPublicKeyDigest
-// related implementation not available currently in lib ccnx-cpp
-// TODO: exclude
-// related implementation not available currently in lib ccnx-cpp
-
-

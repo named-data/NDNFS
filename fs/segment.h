@@ -33,12 +33,12 @@ inline int segment_to_size(int seg)
     return (seg << ndnfs::seg_size_shift);
 }
 
-int read_segment(const char* path, const uint64_t ver, const int seg, char *output, const int limit, const int offset);
+int read_segment(const char* path, const int ver, const int seg, char *output, const int limit, const int offset);
 
-int make_segment(const char* path, const uint64_t ver, const int seg, const bool final, const char *data, const int len);
+int make_segment(const char* path, const int ver, const int seg, const bool final, const char *data, const int len);
 
-void remove_segments(const char* path, const uint64_t ver, const int start = 0);
+void remove_segments(const char* path, const int ver, const int start = 0);
 
-void truncate_segment(const char* path, const uint64_t ver, const int seg, const off_t length);
+void truncate_segment(const char* path, const int ver, const int seg, const off_t length);
 
 #endif

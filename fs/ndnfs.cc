@@ -182,8 +182,8 @@ CREATE INDEX id_seg ON file_segments (path, version, segment);    \n\
     sqlite3_bind_int(stmt, 5, now);
     sqlite3_bind_int(stmt, 6, now);
     sqlite3_bind_int(stmt, 7, -1);  // size
-    sqlite3_bind_int64(stmt, 8, -1);  // current version
-    sqlite3_bind_int64(stmt, 9, -1);  // temp version
+    sqlite3_bind_int(stmt, 8, -1);  // current version
+    sqlite3_bind_int(stmt, 9, -1);  // temp version
     int res = sqlite3_step(stmt);
     if (res == SQLITE_OK || res == SQLITE_DONE) {
         cout << "main: OK" << endl;

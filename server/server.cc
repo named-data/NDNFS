@@ -89,7 +89,7 @@ static uint8_t DEFAULT_PRIVATE_KEY_DER[] = {
 
 // create a global handler
 Name signer("/ndn/ucla.edu/qiuhan");
-#if 0
+#if 1
 ptr_lib::shared_ptr<OSXPrivateKeyStorage> privateStoragePtr(new OSXPrivateKeyStorage());
 #else
 Name certificateName = Name(signer).append(Name("ID-CERT/0"));
@@ -130,7 +130,7 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-#if 1
+#if 0
     privateStoragePtr->setKeyPairForKeyName
       (signer, DEFAULT_PUBLIC_KEY_DER, sizeof(DEFAULT_PUBLIC_KEY_DER), DEFAULT_PRIVATE_KEY_DER, sizeof(DEFAULT_PRIVATE_KEY_DER));
 
