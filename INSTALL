@@ -34,9 +34,10 @@ sudo make install
 
 Build
 -----
+
+* Mac OS X 10.7.3, Mac OS X 10.8.4
 To build in a terminal, change directory to the NDNFS root.  Enter:
-export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
-./waf configure
+PKG_CONFIG_PATH=/usr/local/lib/pkgconfig ./waf configure
 ./waf
 
 Optionally, instead of "./waf configure" you can enter:
