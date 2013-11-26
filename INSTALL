@@ -24,7 +24,6 @@ In a terminal, enter:
 sudo port install boost
 sudo port install protobuf-cpp
 sudo port install pkgconfig
-export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
 
 In a new terminal, install NDN-CPP as follows (after boost is installed):
 git clone https://github.com/named-data/ndn-cpp.git
@@ -36,6 +35,7 @@ sudo make install
 Build
 -----
 To build in a terminal, change directory to the NDNFS root.  Enter:
+export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
 ./waf configure
 ./waf
 
