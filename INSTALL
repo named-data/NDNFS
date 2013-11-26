@@ -1,0 +1,31 @@
+NDNFS: NDN-friendly file system (based on FUSE)
+
+Prerequisites
+-------------
+
+* Mac OS X 10.7.3, Mac OS X 10.8.4
+Install Xcode.
+In Xcode Preferences > Downloads, install "Command Line Tools".
+
+In a new terminal, install NDN-CPP as follows:
+git clone https://github.com/named-data/ndn-cpp.git
+cd ndn-cpp
+./configure
+make
+sudo make install
+
+Install MacPorts from http://www.macports.org/install.php
+In a terminal, enter:
+sudo port install boost
+sudo port install protobuf-cpp
+sudo port install pkgconfig
+export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
+
+Build
+-----
+To build in a terminal, change directory to the NDNFS root.  Enter:
+./waf configure
+./waf
+
+Optionally, instead of "./waf configure" you can enter:
+./waf configure --debug

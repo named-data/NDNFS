@@ -3,6 +3,8 @@ NDNFS
 
 NDN-friendly file system (based on FUSE)
 
+See the file INSTALL for build and install instructions.
+
 Compilation on Mac OSX 10.8 & 10.7
 ----------------------------------
 
