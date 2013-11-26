@@ -5,21 +5,6 @@ NDN-friendly file system (based on FUSE)
 
 See the file INSTALL for build and install instructions.
 
-Compilation on Mac OSX 10.8 & 10.7
-----------------------------------
-
-Dependencies:
-
-* OXSFUSE 2.5.6;
-* Sqlite;
-* ndn.cxx library;
-* boost library;
-
-To compile the source code:
-
-    ./waf configure (--debug)
-    ./waf
-
 Usage
 -----
 
