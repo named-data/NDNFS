@@ -30,7 +30,7 @@
 #include <ndn-cpp/security/policy/no-verify-policy-manager.hpp>
 #include <ndn-cpp/security/certificate/certificate.hpp>
 #include <sqlite3.h>
-#include <boost/bind.hpp>
+//#include <boost/bind.hpp>
 #include <unistd.h>
 
 #include "servermodule.h"
@@ -88,11 +88,11 @@ static uint8_t DEFAULT_PRIVATE_KEY_DER[] = {
 };
 
 // create a global handler
-Name signer("/ndn/ucla.edu/qiuhan");
+Name signer("/ndn/edu/ucla/cs/irl/imac");
 #if 1
 ptr_lib::shared_ptr<OSXPrivateKeyStorage> privateStoragePtr(new OSXPrivateKeyStorage());
 #else
-Name certificateName = Name(signer).append(Name("ID-CERT/0"));
+Name certificateName = Name(signer).append(Name("ID-CERT/%FD%FF%FF%FF%FF%C4F%B1%E7"));
 ptr_lib::shared_ptr<MemoryPrivateKeyStorage> privateStoragePtr(new MemoryPrivateKeyStorage());
 #endif
 ptr_lib::shared_ptr<KeyChain> keychain(new KeyChain
@@ -104,7 +104,7 @@ ptr_lib::shared_ptr<Face> handler(new Face(ndnTransport, ptr_lib::make_shared<Tc
 string global_prefix;
 
 int main(int argc, char **argv) {
-    const char* prefix = "/ndn/ucla.edu/qiuhan/dummy/ndnfs";
+    const char* prefix = "/ndn/ucla.edu/cs/irl/imac/ndnfs";
     int opt;
 
     while ((opt = getopt(argc, argv, "p:d:")) != -1) {

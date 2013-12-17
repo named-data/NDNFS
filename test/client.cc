@@ -34,7 +34,7 @@
 
 using namespace std;
 using namespace ndn;
-using namespace boost;
+//using namespace boost;
 
 ptr_lib::shared_ptr<OSXPrivateKeyStorage> privateStoragePtr(new OSXPrivateKeyStorage());
 ptr_lib::shared_ptr<KeyChain> keychain(new KeyChain

@@ -27,7 +27,7 @@
 #include <cstdio>
 
 using namespace std;
-using namespace boost;
+//using namespace boost;
 using namespace ndn;
 
 int read_segment(const char* path, const int ver, const int seg, char *output, const int limit, const int offset)
@@ -116,12 +116,7 @@ int make_segment(const char* path, const int ver, const int seg, const bool fina
     data0.setName(seg_name);
     data0.setContent((const uint8_t*)data, len);
     data0.getMetaInfo().setTimestampMilliseconds(time(NULL) * 1000.0);
-    try{
-        keychain->signByIdentity(data0,signer);
-    } catch(SecurityException & e) {
-        cerr << e.Msg() << endl;
-        cerr << data0.getName() << endl;
-    }
+    keychain->signByIdentity(data0, ndnfs::signer);
     SignedBlob wire_data = data0.wireEncode();
     const char* co_raw = (const char*)wire_data.buf();
     int co_size = wire_data.size();
@@ -210,7 +205,7 @@ void truncate_segment(const char* path, const int ver, const int seg, const off_
             trunc_data.setName(data.getName());
             trunc_data.setContent(content, length);
             trunc_data.getMetaInfo().setTimestampMilliseconds(time(NULL) * 1000.0);
-            keychain->signByIdentity(trunc_data,signer);
+            keychain->signByIdentity(trunc_data, ndnfs::signer);
             SignedBlob wire_data = trunc_data.wireEncode();
             const uint8_t *trunc_co_raw = wire_data.buf();
             int trunc_co_size = wire_data.size();

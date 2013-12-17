@@ -49,11 +49,11 @@ def configure(conf):
 
     conf.write_config_header('config.h')
 
-    #conf.check(features='cxx cxxprogram', lib=['ndn-cpp'], cflags=['-Wall'], uselib_store='NDNCXX', mandatory=True)
-    conf.check(features='cxx cxxprogram', lib=['ndn-cpp'], cflags=['-Wall'], uselib_store='NDNCXX', mandatory=True)
+    conf.check(features='cxx cxxprogram', lib=['ndn-cpp'], libpath=['/usr/local/lib'], cflags=['-Wall'], uselib_store='NDNCPP', mandatory=True)
+    #conf.check_cfg(package='ndn-cpp', args=['--cflags', '--libs'], uselib_store='NDNCPP', mandatory=True)
 
-    conf.load('boost')
-    conf.check_boost(lib='system test iostreams filesystem thread')
+    #conf.load('boost')
+    #conf.check_boost(lib='system test iostreams filesystem thread')
 
     if conf.options._test:
         conf.define ('_TESTS', 1)
@@ -66,21 +66,21 @@ def build (bld):
         target = "ndnfs",
         features = ["cxx", "cxxprogram"],
         source = bld.path.ant_glob(['fs/*.cc']),
-        use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD FUSE NDNCXX SQLITE3',
+        use = 'FUSE NDNCPP SQLITE3',
         includes = '.'
         )
     bld (
         target = "ndnfs-server",
         features = ["cxx", "cxxprogram"],
         source = bld.path.ant_glob (['server/server.cc', 'server/servermodule.cc', 'server/dir.proto', 'server/file.proto']),
-        use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD NDNCXX SQLITE3',
+        use = 'NDNCPP SQLITE3',
         includes = 'server'
         )
     bld (
         target = "test-client",
         features = ["cxx", "cxxprogram"],
         source = 'test/client.cc server/dir.proto server/file.proto',
-        use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD NDNCXX',
+        use = 'NDNCPP',
         includes = 'server'
         )
 #    bld (

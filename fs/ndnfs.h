@@ -50,9 +50,8 @@ extern ndn::ptr_lib::shared_ptr<ndn::KeyChain> keychain;
 extern const char *db_name;
 extern sqlite3 *db;
 
-extern ndn::Name signer;
-
 namespace ndnfs {
+    extern ndn::Name signer;
     extern std::string global_prefix;
 
     extern const int dir_type;
