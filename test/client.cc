@@ -48,7 +48,7 @@ void onTimeout(const ptr_lib::shared_ptr<const Interest>&);
 
 bool done = false;
 
-void onData(const ptr_lib::shared_ptr<const Interest>&interest, const ptr_lib::shared_ptr<Data>&data) {
+void onData(const ptr_lib::shared_ptr<const Interest>& interest, const ptr_lib::shared_ptr<Data>& data) {
     const Blob& content = data->getContent();
     const Name& data_name = data->getName();
     const Name::Component& comp = data_name.get(data_name.size() - 2);
@@ -93,9 +93,9 @@ void onData(const ptr_lib::shared_ptr<const Interest>&interest, const ptr_lib::s
 }
 
 void onTimeout(const ptr_lib::shared_ptr<const Interest>& origInterest) {
-    // re-express interest
-    cout << "TIME OUT :(" << endl;
-    handler->expressInterest(*origInterest, onData, onTimeout);
+    cout << "TIMEOUT!" << endl;
+    //handler->expressInterest(*origInterest, onData, onTimeout);
+    done = true;
 }
 
 void Usage() {

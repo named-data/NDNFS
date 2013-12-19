@@ -44,8 +44,8 @@ ndn::ptr_lib::shared_ptr<ndn::KeyChain> keychain(new ndn::KeyChain
 const int ndnfs::dir_type = 0;
 const int ndnfs::file_type = 1;
 
-const int ndnfs::seg_size = 4096;  // size of the content in each content object segment counted in bytes
-const int ndnfs::seg_size_shift = 12;
+const int ndnfs::seg_size = 8192;  // size of the content in each content object segment counted in bytes
+const int ndnfs::seg_size_shift = 13;
 
 int ndnfs::user_id = 0;
 int ndnfs::group_id = 0;

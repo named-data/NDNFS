@@ -16,7 +16,8 @@
  *
  * Author: Qiuhan Ding <dingqiuhan@gmail.com>, Wentao Shang <wentao@cs.ucla.edu>
  */
-#define NDNFS_DEBUG
+
+//#define NDNFS_DEBUG
 
 #include <cstdio>
 #include <iostream>
@@ -24,8 +25,6 @@
 #include <sstream>
 #include <string>
 #include <vector>
-
-#include <boost/lexical_cast.hpp>
 
 #include "servermodule.h"
 #include <ndn-cpp/face.hpp>
@@ -35,7 +34,6 @@
 
 using namespace std;
 using namespace ndn;
-using namespace boost;
 
 extern ptr_lib::shared_ptr<Face> handler;
 
@@ -113,10 +111,10 @@ void ProcessName(const Name& interest_name, Transport& transport) {
             sqlite3_finalize(stmt);
             return;
         }
-
+#ifdef NDNFS_DEBUG
         cout << "ProcessName(): a match has been found for prefix: " << interest_name << endl;
         cout << "ProcessName(): fetching content object from database" << endl;
-       
+#endif       
         const char * data = (const char *)sqlite3_column_blob(stmt, 3);
         int len = sqlite3_column_bytes(stmt, 3);
 #ifdef NDNFS_DEBUG
@@ -130,7 +128,9 @@ void ProcessName(const Name& interest_name, Transport& transport) {
         cout << endl;
 #endif
         transport.send((uint8_t*)data, len);
+#ifdef NDNFS_DEBUG
         cout << "ProcessName(): content object returned and interest consumed" << endl;
+#endif
         sqlite3_finalize(stmt);
     }
     else if (version != -1 && seg == -1) {

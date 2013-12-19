@@ -20,6 +20,8 @@ def configure(conf):
     if conf.options.debug:
         conf.define ('NDNFS_DEBUG', 1)
         conf.add_supported_cxxflags (cxxflags = ['-O0',
+                                                 '-std=c++11',
+                                                 '-std=c++0x',
                                                  '-Wall',
                                                  '-Wno-unused-variable',
                                                  '-g3',
@@ -28,7 +30,10 @@ def configure(conf):
                                                  '-Qunused-arguments'         # only clang supports
                                                  ])
     else:
-        conf.add_supported_cxxflags (cxxflags = ['-O3', '-g'])
+        conf.add_supported_cxxflags (cxxflags = ['-O3', 
+                                                 '-std=c++11',
+                                                 '-std=c++0x',
+                                                 '-g'])
 
     conf.define ("FUSE_NDNFS_VERSION", VERSION)
 
@@ -50,15 +55,15 @@ def configure(conf):
     conf.write_config_header('config.h')
 
     conf.check(features='cxx cxxprogram', lib=['ndn-cpp'], libpath=['/usr/local/lib'], cflags=['-Wall'], uselib_store='NDNCPP', mandatory=True)
-    #conf.check_cfg(package='ndn-cpp', args=['--cflags', '--libs'], uselib_store='NDNCPP', mandatory=True)
-
-    #conf.load('boost')
-    #conf.check_boost(lib='system test iostreams filesystem thread')
+    conf.env.append_value('INCLUDES', ['/usr/local/include'])
 
     if conf.options._test:
         conf.define ('_TESTS', 1)
         conf.env.TEST = 1
 
+    conf.load('boost')
+    conf.check_boost(lib='system test iostreams thread chrono')
+        
     conf.load('protoc')
 
 def build (bld):
@@ -83,13 +88,13 @@ def build (bld):
         use = 'NDNCPP',
         includes = 'server'
         )
-#    bld (
-#        target = "cat-file",
-#        features = ["cxx", "cxxprogram"],
-#        source = 'test/cat_file.cc server/dir.proto server/file.proto',
-#        use = 'BOOST BOOST_SYSTEM BOOST_FILESYSTEM BOOST_THREAD NDNCXX',
-#        includes = 'server'
-#        )
+    bld (
+        target = "cat-file",
+        features = ["cxx", "cxxprogram"],
+        source = 'test/cat_file.cc server/dir.proto server/file.proto',
+        use = 'BOOST NDNCPP',
+        includes = 'server'
+        )
 
 @Configure.conf
 def add_supported_cxxflags(self, cxxflags):

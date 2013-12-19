@@ -35,11 +35,7 @@
 
 extern const char *db_name;
 extern sqlite3 *db;
-#if 1
 extern ndn::ptr_lib::shared_ptr<ndn::OSXPrivateKeyStorage> privateStoragePtr;
-#else
-extern ndn::ptr_lib::shared_ptr<ndn::MemoryPrivateKeyStorage> privateStoragePtr;
-#endif
 extern ndn::ptr_lib::shared_ptr<ndn::KeyChain> keychain;
 extern ndn::Name signer;
 

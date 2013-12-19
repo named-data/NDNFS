@@ -18,61 +18,67 @@
  */
 
 
-#include <ndn.cxx/common.h>
-#include <ndn.cxx/data.h>
-#include <ndn.cxx/interest.h>
-#include <ndn.cxx/wrapper/wrapper.h>
-#include <ndn.cxx/wrapper/closure.h>
-#include <ndn.cxx/security/keychain.h>
-#include <ndn.cxx/security/identity/osx-privatekey-store.h>
-#include <boost/bind.hpp>
+#include <ndn-cpp/common.hpp>
+#include <ndn-cpp/data.hpp>
+#include <ndn-cpp/interest.hpp>
+#include <ndn-cpp/face.hpp>
+#include <ndn-cpp/security/key-chain.hpp>
+#include <ndn-cpp/security/identity/osx-private-key-storage.hpp>
+#include <ndn-cpp/security/identity/basic-identity-storage.hpp>
+#include <ndn-cpp/security/policy/no-verify-policy-manager.hpp>
 
 #include "dir.pb.h"
 #include "file.pb.h"
 
 #include <iostream>
-#include <fstream>
+//#include <fstream>
+#include <boost/chrono.hpp>
 
-#include <boost/date_time/posix_time/posix_time.hpp>
 
 using namespace std;
 using namespace ndn;
-using namespace boost;
 
-Ptr<security::OSXPrivatekeyStore> privateStoragePtr = Ptr<security::OSXPrivatekeyStore>::Create();
-Ptr<security::Keychain> keychain = Ptr<security::Keychain>(new security::Keychain(privateStoragePtr, "/Users/ndn/qiuhan/policy", "/tmp/encryption.db"));
-Ptr<Wrapper> handler = Ptr<Wrapper>(new Wrapper(keychain));
+using namespace boost::chrono;
 
-void OnMetaData(Ptr<Data> data);
-void OnFileData(Ptr<Data> data);
-void OnTimeout(Ptr<Closure> closure, Ptr<Interest> origInterest);
-void verifiedError (Ptr<Interest> interest);
+ptr_lib::shared_ptr<OSXPrivateKeyStorage> privateStoragePtr(new OSXPrivateKeyStorage());
+ptr_lib::shared_ptr<KeyChain> keychain(new KeyChain
+  (ptr_lib::make_shared<IdentityManager>(ptr_lib::make_shared<BasicIdentityStorage>(), privateStoragePtr), 
+   ptr_lib::make_shared<NoVerifyPolicyManager>()));
+ptr_lib::shared_ptr<Transport> ndnTransport(new TcpTransport());
+ptr_lib::shared_ptr<Face> handler(new Face(ndnTransport, ptr_lib::make_shared<TcpTransport::ConnectionInfo>("localhost")));
 
 ndn::Name file_name;
-int retrans = 0;
 int total_size = 0;
 int total_seg = 0;
 int current_seg = 0;
 
-ndn::Time start;
+bool done = false;
 
-ofstream ofs("/tmp/file1", ios_base::binary | ios_base::trunc);
+typedef high_resolution_clock::time_point stdtime;
+typedef high_resolution_clock::duration stdduration;
 
-void OnMetaData (Ptr<Data> data) {
-    Blob& content = data->content();
-    Name& data_name = data->getName();
-    name::Component& comp = data_name.get(data_name.size() - 2);
-    string marker = comp.toUri();
+stdtime start;
+
+//ofstream ofs("/tmp/file1", ios_base::binary | ios_base::trunc);
+
+void onFileData (const ptr_lib::shared_ptr<const Interest>& interest, const ptr_lib::shared_ptr<Data>& data);
+void onTimeout (const ptr_lib::shared_ptr<const Interest>& origInterest);
+
+void onMetaData (const ptr_lib::shared_ptr<const Interest>& interest, const ptr_lib::shared_ptr<Data>& data) {
+    const Blob& content = data->getContent();
+    const Name& data_name = data->getName();
+    const Name::Component& comp = data_name.get(data_name.size() - 2);
+    string marker = comp.toEscapedString();
     if (marker == "%C1.FS.dir") {
         cerr << "Requested name correspondes to a directory." << endl;
     } else if (marker == "%C1.FS.file") {
         ndnfs::FileInfo infof;
         if (infof.ParseFromArray(content.buf(), content.size()) && infof.IsInitialized()) {
             cout << "File metadata received." << endl;
-            cout << "    name:  " << data_name.toUri() << endl;
-            cout << "    size:  " << infof.size() << endl;
-            cout << "    version number:   " << infof.version() << endl;
-            cout << "    total segments: " << infof.totalseg() << endl;
+            cout << "  name:  " << data_name.toUri() << endl;
+            cout << "  size:  " << infof.size() << endl;
+            cout << "  version:   " << infof.version() << endl;
+            cout << "  total segments: " << infof.totalseg() << endl;
 
             total_size = infof.size();
             total_seg = infof.totalseg();
@@ -82,21 +88,13 @@ void OnMetaData (Ptr<Data> data) {
 
             cout << "Start to fetch file segments..." << endl;
 
-            Ptr<Interest> interestPtr = Ptr<Interest>(new Interest());
-            interestPtr->setScope(Interest::SCOPE_LOCAL_HOST);
-            interestPtr->setName(Name(file_name).appendSeqNum((uint64_t)current_seg));
-            //interestPtr->setAnswerOriginKind(0);
+            ptr_lib::shared_ptr<Interest> interestPtr(new Interest());
+            interestPtr->setScope(ndn_Interest_ANSWER_CONTENT_STORE);
+            interestPtr->setName(Name(file_name).appendSegment((uint64_t)current_seg));
+            interestPtr->setAnswerOriginKind(0);
 
-            Ptr<Closure> closure = Ptr<Closure> (
-                new Closure(boost::bind(OnFileData, _1),
-                            boost::bind(OnTimeout, _1, _2),
-                            boost::bind(verifiedError, _1),
-                            Closure::UnverifiedDataCallback()
-                    )
-                );
-
-            start = ndn::time::Now();
-            handler->sendInterest(interestPtr, closure);
+            start = high_resolution_clock::now();
+            handler->expressInterest(*interestPtr, onFileData, onTimeout);
         } else {
             cerr << "protobuf error" << endl;
         }
@@ -106,99 +104,95 @@ void OnMetaData (Ptr<Data> data) {
     return;
 }
 
-void OnFileData (Ptr<Data> data) {
-    Blob& content = data->content();
-    Name& data_name = data->getName();
-    cout << "Segment received: " << data_name.toUri() << endl;
+void onFileData (const ptr_lib::shared_ptr<const Interest>& interest, const ptr_lib::shared_ptr<Data>& data) {
+    //const Blob& content = data->getContent();
+    const Name& data_name = data->getName();
+    //cout << "Segment received: " << data_name.toUri() << endl;
     //cout << "    data: " << string((char*)content.buf(), content.size()) << endl;
-    for (int i = 0; i < content.size(); i++) {
-        ofs << content[i];
-    }
+    //for (int i = 0; i < content.size(); i++) {
+    //    ofs << content[i];
+    //}
 
-    current_seg = (int)(data_name.rbegin()->toSeqNum());
-    cout << current_seg << endl;
-    current_seg ++;
+    current_seg = (int)(data_name.rbegin()->toSegment());
+    //cout << current_seg << endl;
+    current_seg++;  // segments are zero-indexed
     if (current_seg == total_seg) {
-        ndn::Time stop = ndn::time::Now();
+        stdtime stop = high_resolution_clock::now();
+        //stdduration td = stop - start;
         cout << "Last segment received." << endl;
-        cout << "Total run time: " << (stop - start) << endl;
+        cout << "Total run time: " << duration_cast<milliseconds>(stop - start).count() << " ms" << endl;
         cout << "Total segment fetched: " << current_seg << endl;
-        cout << "Total size fetched: " << total_size << endl;
-        cout << "Total number of retrans: " << retrans << endl;
+        cout << "Throughput: " << (double) total_size / (double) duration_cast<milliseconds>(stop - start).count() / 1024 * 8 << " kbps" << endl;
+        done = true;
     } else {
-        Ptr<Interest> interestPtr = Ptr<Interest>(new Interest());
-        interestPtr->setScope(Interest::SCOPE_LOCAL_HOST);
-        interestPtr->setName(Name(file_name).appendSeqNum((uint64_t)current_seg));
-        //interestPtr->setAnswerOriginKind(0);    
+        ptr_lib::shared_ptr<Interest> interestPtr(new Interest());
+        interestPtr->setScope(ndn_Interest_ANSWER_CONTENT_STORE);
+        interestPtr->setName(Name(file_name).appendSegment((uint64_t)current_seg));
+        interestPtr->setAnswerOriginKind(0);    
 
-        Ptr<Closure> closure = Ptr<Closure> (
-            new Closure(boost::bind(OnFileData, _1),
-                        boost::bind(OnTimeout, _1, _2),
-                        boost::bind(verifiedError, _1),
-                        Closure::UnverifiedDataCallback()
-                )
-            );
-        
-        handler->sendInterest(interestPtr, closure);
+        handler->expressInterest(*interestPtr, onFileData, onTimeout);
     }
-    return;
 }
 
-void OnTimeout (Ptr<Closure> closure, Ptr<Interest> origInterest) {
-    // re-express interest
-    retrans++;
-    cout << "Timeout on segment #" << current_seg << endl;
-    if (retrans < 50)
-        handler->sendInterest(origInterest, closure);
+void onTimeout (const ptr_lib::shared_ptr<const Interest>& origInterest) {
+    cout << "Timeout!" << current_seg << endl;
+    done = true;
 }
 
 void Usage () {
-	fprintf(stderr, "usage: ./client [-n name]\n");
+	fprintf(stderr, "usage: ./cat_file [-n name]\n");
 	exit(1);
-}
-
-void verifiedError (Ptr<Interest> interest) {
-    cout << "unverified" << endl;
 }
 
 
 int main (int argc, char **argv) {
-    Ptr<Interest> interestPtr = Ptr<Interest>(new Interest());
-    interestPtr->setScope(Interest::SCOPE_LOCAL_HOST);
-	//interestPtr->setAnswerOriginKind(0);
+    ptr_lib::shared_ptr<Interest> interestPtr(new Interest());
+    interestPtr->setScope(ndn_Interest_ANSWER_CONTENT_STORE);
 
 	const char* name = NULL;
+    bool repo_mode = false;
 
 	int opt;
-	while ((opt = getopt(argc, argv, "n:")) != -1) {
+	while ((opt = getopt(argc, argv, "n:r")) != -1) {
 		switch (opt) {
-			case 'n': 
-				name = optarg;
-				cout << "main(): set name: " << name << endl;
-				interestPtr->setName(ndn::Name(name).append("%C1.FS.file"));
-				break;
-			default: 
-				Usage(); 
-				break;
-		 }
+        case 'n': 
+            name = optarg;
+            cout << "main(): set name: " << name << endl;
+            break;
+        case 'r':
+            // Fetch file from repo (unversioned but sequenced)
+            repo_mode = true;
+            break;
+        default: 
+            Usage(); 
+            break;
+        }
+	}
+    
+    if (repo_mode) {
+        file_name = Name(name);
+        total_seg = 12654;
+        total_size = 103655871;
+        
+        interestPtr->setName(Name(file_name).appendSegment(0));
+        interestPtr->setAnswerOriginKind(0);
+
+        start = high_resolution_clock::now();
+        handler->expressInterest(*interestPtr, onFileData, onTimeout);
+    } else {
+        interestPtr->setName(Name(name).append("%C1.FS.file"));
+        interestPtr->setAnswerOriginKind(0);
+        handler->expressInterest(*interestPtr, onMetaData, onTimeout);
 	}
 
-    Ptr<Closure> closure = Ptr<Closure> (
-        new Closure(boost::bind(OnMetaData, _1),
-                    boost::bind(OnTimeout, _1, _2),
-                    boost::bind(verifiedError, _1),
-                    Closure::UnverifiedDataCallback()
-            )
-        );
-    handler->sendInterest(interestPtr, closure);
-    
-	start = ndn::time::Now();
-	
 	cout << "Started..." << endl;
 
-	sleep(10);
+	while (!done) {
+        handler->processEvents();
+        usleep (10);
+    }
 
-    ofs.close();
+    //ofs.close();
 
 	return 0;
 }
