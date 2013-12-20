@@ -95,6 +95,13 @@ def build (bld):
         use = 'BOOST NDNCPP',
         includes = 'server'
         )
+    bld (
+        target = "cat-file-pipe",
+        features = ["cxx", "cxxprogram"],
+        source = 'test/cat_file_pipe.cc server/dir.proto server/file.proto',
+        use = 'BOOST NDNCPP',
+        includes = 'server'
+        )
 
 @Configure.conf
 def add_supported_cxxflags(self, cxxflags):
