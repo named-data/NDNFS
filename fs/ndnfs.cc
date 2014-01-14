@@ -27,19 +27,17 @@
 #include <sys/types.h>
 
 using namespace std;
-//using namespace boost;
 
 const char *db_name = "/tmp/ndnfs.db";
 sqlite3 *db;
 
-ndn::Name ndnfs::signer ("/ndn/edu/ucla/cs/irl/imac");
+ndn::Name ndnfs::signer ("/ndn/edu/ucla/cs/wentao");
 string ndnfs::global_prefix;
 
 ndn::ptr_lib::shared_ptr<ndn::OSXPrivateKeyStorage> privateStoragePtr(new ndn::OSXPrivateKeyStorage());
 ndn::ptr_lib::shared_ptr<ndn::KeyChain> keychain(new ndn::KeyChain
   (ndn::ptr_lib::make_shared<ndn::IdentityManager>(ndn::ptr_lib::make_shared<ndn::BasicIdentityStorage>(), privateStoragePtr), 
    ndn::ptr_lib::make_shared<ndn::NoVerifyPolicyManager>()));
-//////policy needs to be changed
 
 const int ndnfs::dir_type = 0;
 const int ndnfs::file_type = 1;
@@ -77,16 +75,14 @@ struct ndnfs_config {
 
 static struct fuse_opt ndnfs_opts[] = {
     NDNFS_OPT("prefix=%s", prefix, 0),
-#if 0
     FUSE_OPT_END
-#endif
 };
 
 int main(int argc, char **argv)
 {
     assert((1 << ndnfs::seg_size_shift) == ndnfs::seg_size);
     //ndnfs::signer = ndn::ptr_lib::make_shared<ndn::BasicIdentityStorage> ()->getDefaultIdentity ();
-    ndnfs::global_prefix = "/ndn/ucla.edu/cs/irl/imac/ndnfs";
+    ndnfs::global_prefix = "/ndn/ucla.edu/cs/wentao/ndnfs";
     
     cout << "main: NDNFS version 0.2" << endl;
 

@@ -35,7 +35,7 @@ inline int segment_to_size(int seg)
 
 int read_segment(const char* path, const int ver, const int seg, char *output, const int limit, const int offset);
 
-int make_segment(const char* path, const int ver, const int seg, const bool final, const char *data, const int len);
+int make_segment(const char* path, const int ver, const int seg, const char *data, const int len);
 
 void remove_segments(const char* path, const int ver, const int start = 0);
 

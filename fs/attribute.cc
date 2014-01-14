@@ -21,7 +21,6 @@
 #include "attribute.h"
 
 using namespace std;
-//using namespace boost;
 
 int ndnfs_getattr(const char *path, struct stat *stbuf)
 {

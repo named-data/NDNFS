@@ -24,13 +24,15 @@
 #include "ndnfs.h"
 #include "segment.h"
 
-int read_version(const char* path, const int version, char *output, size_t size, off_t offset);
+int read_version(const char* path, const int ver, char *output, size_t size, off_t offset);
 
-int write_temp_version(const char* path, const int current_ver, const int temp_ver, const char *buf, size_t size, off_t offset);
+int duplicate_version (const char *path, const int from_ver, const int to_ver);
 
-int truncate_temp_version(const char* path, const int current_ver, const int temp_ver, off_t length);
+int write_version(const char* path, const int ver, const char *buf, size_t size, off_t offset);
 
-void remove_version(const char* path, const int version);
+int truncate_version(const char* path, const int ver, off_t length);
+
+void remove_version(const char* path, const int ver);
 
 void remove_versions(const char* path);
 

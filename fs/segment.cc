@@ -27,7 +27,6 @@
 #include <cstdio>
 
 using namespace std;
-//using namespace boost;
 using namespace ndn;
 
 int read_segment(const char* path, const int ver, const int seg, char *output, const int limit, const int offset)
@@ -56,12 +55,12 @@ int read_segment(const char* path, const int ver, const int seg, char *output, c
     const uint8_t *content = data.getContent().buf();
 
 #ifdef NDNFS_DEBUG
-    cout << "read_segment: raw data is " << endl;
-    for (int i = 0; i < co_size; i++) {
-        cout << co_raw[i];
-    }
-    cout << endl;
-    cout << "read_segment: raw data length is " << co_size << endl;
+    //cout << "read_segment: raw data is " << endl;
+    //for (int i = 0; i < co_size; i++) {
+    //    cout << co_raw[i];
+    //}
+    //cout << endl;
+    //cout << "read_segment: raw data length is " << co_size << endl;
 #endif
 
     size_t copy_len = data.getContent().size();
@@ -84,7 +83,7 @@ int read_segment(const char* path, const int ver, const int seg, char *output, c
 }
 
 
-int make_segment(const char* path, const int ver, const int seg, const bool final, const char *data, const int len)
+int make_segment(const char* path, const int ver, const int seg, const char *data, const int len)
 {
 #ifdef NDNFS_DEBUG
     cout << "make_segment: path=" << path << std::dec << ", ver=" << ver << ", seg=" << seg << ", len=" << len << endl;
@@ -122,16 +121,16 @@ int make_segment(const char* path, const int ver, const int seg, const bool fina
     int co_size = wire_data.size();
 
 #ifdef NDNFS_DEBUG
-    cout << "make_segment: raw data is" << endl;
-    for (int i = 0; i < co_size; i++) {
-        printf("%02x", (unsigned char)co_raw[i]);
-    }
-    cout << endl;
-    cout << "make_segment: raw data length is " << co_size << endl;
+    //cout << "make_segment: raw data is" << endl;
+    //for (int i = 0; i < co_size; i++) {
+    //    printf("%02x", (unsigned char)co_raw[i]);
+    //}
+    //cout << endl;
+    //cout << "make_segment: raw data length is " << co_size << endl;
 #endif
 
     sqlite3_stmt *stmt;
-    sqlite3_prepare_v2(db, "INSERT INTO file_segments (path,version,segment,data,offset) VALUES (?,?,?,?,?);", -1, &stmt, 0);
+    sqlite3_prepare_v2(db, "INSERT OR REPLACE INTO file_segments (path,version,segment,data,offset) VALUES (?,?,?,?,?);", -1, &stmt, 0);
     sqlite3_bind_text(stmt,1,path,-1,SQLITE_STATIC);
     sqlite3_bind_int(stmt,2,ver);
     sqlite3_bind_int(stmt,3,seg);
@@ -146,7 +145,7 @@ int make_segment(const char* path, const int ver, const int seg, const bool fina
 void remove_segments(const char* path, const int ver, const int start/* = 0 */)
 {
 #ifdef NDNFS_DEBUG
-    cout << "remove_segments: path=" << path << std::dec << ", ver=" << ver << ", from segment #" << start << endl;
+    cout << "remove_segments: path=" << path << std::dec << ", ver=" << ver << ", starting from segment #" << start << endl;
 #endif
 
     sqlite3_stmt *stmt;

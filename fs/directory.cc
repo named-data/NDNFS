@@ -21,7 +21,6 @@
 #include "directory.h"
 
 using namespace std;
-//using namespace boost;
 
 int ndnfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi)
 {
