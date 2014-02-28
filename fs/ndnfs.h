@@ -25,7 +25,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <stdlib.h>
-
+#include <assert.h>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -38,8 +38,8 @@
 #include <sqlite3.h>
 
 #include <ndn-cpp/security/key-chain.hpp>
-#include <ndn-cpp/security/identity/osx-private-key-storage.hpp>
-#include <ndn-cpp/security/identity/basic-identity-storage.hpp>
+#include <ndn-cpp/security/identity/memory-identity-storage.hpp>
+#include <ndn-cpp/security/identity/memory-private-key-storage.hpp>
 #include <ndn-cpp/security/policy/no-verify-policy-manager.hpp>
 #include <ndn-cpp/name.hpp>
 

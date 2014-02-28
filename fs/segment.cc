@@ -115,7 +115,7 @@ int make_segment(const char* path, const int ver, const int seg, const char *dat
     data0.setName(seg_name);
     data0.setContent((const uint8_t*)data, len);
     //data0.getMetaInfo().setTimestampMilliseconds(time(NULL) * 1000.0);
-    keychain.signByIdentity(data0, ndnfs::signer);
+    keychain.sign(data0, ndnfs::signer);
     SignedBlob wire_data = data0.wireEncode();
     const char* co_raw = (const char*)wire_data.buf();
     int co_size = wire_data.size();
@@ -204,7 +204,7 @@ void truncate_segment(const char* path, const int ver, const int seg, const off_
             trunc_data.setName(data.getName());
             trunc_data.setContent(content, length);
             //trunc_data.getMetaInfo().setTimestampMilliseconds(time(NULL) * 1000.0);
-            keychain.signByIdentity(trunc_data, ndnfs::signer);
+            keychain.sign(trunc_data, ndnfs::signer);
             SignedBlob wire_data = trunc_data.wireEncode();
             const uint8_t *trunc_co_raw = wire_data.buf();
             int trunc_co_size = wire_data.size();

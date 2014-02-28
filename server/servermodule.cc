@@ -204,7 +204,7 @@ void SendFile(const string& path, int version, int sizef, int totalseg, Transpor
     data0.setName(name);
     data0.setContent((uint8_t*)wireData, size);
     //data0.getMetaInfo().setTimestampMilliseconds(time(NULL) * 1000.0);
-    keychain.signByIdentity(data0, signer);
+    keychain.sign(data0, signer);
     transport.send(*data0.wireEncode());
     return;
 }
@@ -235,7 +235,7 @@ void SendDir(const string& path, int mtime, Transport& transport) {
         data0.setName(name);
         data0.setContent((uint8_t*)wireData, size);
         //data0.getMetaInfo().setTimestampMilliseconds(time(NULL) * 1000.0);
-        keychain.signByIdentity(data0, signer);
+        keychain.sign(data0, signer);
         transport.send(*data0.wireEncode());
         delete wireData;
     }

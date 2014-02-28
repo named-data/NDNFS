@@ -100,7 +100,7 @@ void update_fbi (const char *path, const int ver, int fbi)
     Data seg;
     seg.wireDecode((const uint8_t*)data, len);
     seg.getMetaInfo().setFinalBlockID(Name().appendSegment(fbi).get(0).getValue());
-    keychain.signByIdentity(seg, ndnfs::signer);
+    keychain.sign(seg, ndnfs::signer);
     SignedBlob wire_data = seg.wireEncode();
     const char* co_raw = (const char*)wire_data.buf();
     int co_size = wire_data.size();
