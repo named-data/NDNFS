@@ -22,10 +22,6 @@
 #include <ndn-cpp/data.hpp>
 #include <ndn-cpp/interest.hpp>
 #include <ndn-cpp/face.hpp>
-#include <ndn-cpp/security/key-chain.hpp>
-#include <ndn-cpp/security/identity/osx-private-key-storage.hpp>
-#include <ndn-cpp/security/identity/basic-identity-storage.hpp>
-#include <ndn-cpp/security/policy/no-verify-policy-manager.hpp>
 
 #include "dir.pb.h"
 #include "file.pb.h"
@@ -40,12 +36,7 @@ using namespace ndn;
 
 using namespace boost::chrono;
 
-ptr_lib::shared_ptr<OSXPrivateKeyStorage> privateStoragePtr(new OSXPrivateKeyStorage());
-ptr_lib::shared_ptr<KeyChain> keychain(new KeyChain
-  (ptr_lib::make_shared<IdentityManager>(ptr_lib::make_shared<BasicIdentityStorage>(), privateStoragePtr), 
-   ptr_lib::make_shared<NoVerifyPolicyManager>()));
-ptr_lib::shared_ptr<Transport> ndnTransport(new TcpTransport());
-ptr_lib::shared_ptr<Face> handler(new Face(ndnTransport, ptr_lib::make_shared<TcpTransport::ConnectionInfo>("localhost")));
+Face handler("localhost");
 
 ndn::Name file_name;
 int total_size = 0;
@@ -96,9 +87,9 @@ void onMetaData (const ptr_lib::shared_ptr<const Interest>& interest, const ptr_
                 ptr_lib::shared_ptr<Interest> interestPtr(new Interest());
                 interestPtr->setScope(ndn_Interest_ANSWER_CONTENT_STORE);
                 interestPtr->setName(Name(file_name).appendSegment((uint64_t)current_seg));
-                interestPtr->setAnswerOriginKind(0);
+                //interestPtr->setAnswerOriginKind(0);
                 current_seg++;
-                handler->expressInterest(*interestPtr, onFileData, onTimeout);
+                handler.expressInterest(*interestPtr, onFileData, onTimeout);
             }
         } else {
             cerr << "protobuf error" << endl;
@@ -133,8 +124,8 @@ void onFileData (const ptr_lib::shared_ptr<const Interest>& interest, const ptr_
         ptr_lib::shared_ptr<Interest> interestPtr(new Interest());
         interestPtr->setScope(ndn_Interest_ANSWER_CONTENT_STORE);
         interestPtr->setName(Name(file_name).appendSegment((uint64_t)current_seg));
-        interestPtr->setAnswerOriginKind(0);
-        handler->expressInterest(*interestPtr, onFileData, onTimeout);
+        //interestPtr->setAnswerOriginKind(0);
+        handler.expressInterest(*interestPtr, onFileData, onTimeout);
     }
 }
 
@@ -180,22 +171,22 @@ int main (int argc, char **argv) {
             ptr_lib::shared_ptr<Interest> interestPtr(new Interest());
             interestPtr->setScope(ndn_Interest_ANSWER_CONTENT_STORE);
             interestPtr->setName(Name(file_name).appendSegment(current_seg));
-            interestPtr->setAnswerOriginKind(0);
+            //interestPtr->setAnswerOriginKind(0);
             current_seg++;
-            handler->expressInterest(*interestPtr, onFileData, onTimeout);
+            handler.expressInterest(*interestPtr, onFileData, onTimeout);
         }
     } else {
         ptr_lib::shared_ptr<Interest> interestPtr(new Interest());
         interestPtr->setScope(ndn_Interest_ANSWER_CONTENT_STORE);
         interestPtr->setName(Name(name).append("%C1.FS.file"));
-        interestPtr->setAnswerOriginKind(0);
-        handler->expressInterest(*interestPtr, onMetaData, onTimeout);
+        //interestPtr->setAnswerOriginKind(0);
+        handler.expressInterest(*interestPtr, onMetaData, onTimeout);
 	}
 
 	cout << "Started..." << endl;
 
 	while (!done) {
-        handler->processEvents();
+        handler.processEvents();
         usleep (10);
     }
 

@@ -35,9 +35,10 @@ ndn::Name ndnfs::signer ("/ndn/edu/ucla/cs/wentao");
 string ndnfs::global_prefix;
 
 ndn::ptr_lib::shared_ptr<ndn::OSXPrivateKeyStorage> privateStoragePtr(new ndn::OSXPrivateKeyStorage());
-ndn::ptr_lib::shared_ptr<ndn::KeyChain> keychain(new ndn::KeyChain
-  (ndn::ptr_lib::make_shared<ndn::IdentityManager>(ndn::ptr_lib::make_shared<ndn::BasicIdentityStorage>(), privateStoragePtr), 
-   ndn::ptr_lib::make_shared<ndn::NoVerifyPolicyManager>()));
+ndn::ptr_lib::shared_ptr<ndn::BasicIdentityStorage> identityStoragePtr(new ndn::BasicIdentityStorage());
+ndn::KeyChain keychain(
+    ndn::ptr_lib::make_shared<ndn::IdentityManager>(identityStoragePtr, privateStoragePtr), 
+    ndn::ptr_lib::make_shared<ndn::NoVerifyPolicyManager>());
 
 const int ndnfs::dir_type = 0;
 const int ndnfs::file_type = 1;
@@ -81,7 +82,7 @@ static struct fuse_opt ndnfs_opts[] = {
 int main(int argc, char **argv)
 {
     assert((1 << ndnfs::seg_size_shift) == ndnfs::seg_size);
-    //ndnfs::signer = ndn::ptr_lib::make_shared<ndn::BasicIdentityStorage> ()->getDefaultIdentity ();
+    ndnfs::signer = identityStoragePtr->getDefaultIdentity ();
     ndnfs::global_prefix = "/ndn/ucla.edu/cs/wentao/ndnfs";
     
     cout << "main: NDNFS version 0.2" << endl;

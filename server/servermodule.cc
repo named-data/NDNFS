@@ -35,8 +35,6 @@
 using namespace std;
 using namespace ndn;
 
-extern ptr_lib::shared_ptr<Face> handler;
-
 void OnInterest(const ptr_lib::shared_ptr<const Name>& prefix, const ptr_lib::shared_ptr<const Interest>& interest, Transport& transport, uint64_t registeredPrefixId) {
 #ifdef NDNFS_DEBUG
     cout << "------------------------------------------------------------" << endl;
@@ -205,8 +203,8 @@ void SendFile(const string& path, int version, int sizef, int totalseg, Transpor
     Data data0;
     data0.setName(name);
     data0.setContent((uint8_t*)wireData, size);
-    data0.getMetaInfo().setTimestampMilliseconds(time(NULL) * 1000.0);
-    keychain->signByIdentity(data0, signer);
+    //data0.getMetaInfo().setTimestampMilliseconds(time(NULL) * 1000.0);
+    keychain.signByIdentity(data0, signer);
     transport.send(*data0.wireEncode());
     return;
 }
@@ -236,8 +234,8 @@ void SendDir(const string& path, int mtime, Transport& transport) {
         Data data0;
         data0.setName(name);
         data0.setContent((uint8_t*)wireData, size);
-        data0.getMetaInfo().setTimestampMilliseconds(time(NULL) * 1000.0);
-        keychain->signByIdentity(data0, signer);
+        //data0.getMetaInfo().setTimestampMilliseconds(time(NULL) * 1000.0);
+        keychain.signByIdentity(data0, signer);
         transport.send(*data0.wireEncode());
         delete wireData;
     }

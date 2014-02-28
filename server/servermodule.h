@@ -26,6 +26,7 @@
 #include <ndn-cpp/common.hpp>
 #include <ndn-cpp/name.hpp>
 #include <ndn-cpp/interest.hpp>
+#include <ndn-cpp/security/key-chain.hpp>
 #include <ndn-cpp/security/identity/osx-private-key-storage.hpp>
 #include <ndn-cpp/security/identity/memory-private-key-storage.hpp>
 #include "dir.pb.h"
@@ -35,8 +36,7 @@
 
 extern const char *db_name;
 extern sqlite3 *db;
-extern ndn::ptr_lib::shared_ptr<ndn::OSXPrivateKeyStorage> privateStoragePtr;
-extern ndn::ptr_lib::shared_ptr<ndn::KeyChain> keychain;
+extern ndn::KeyChain keychain;
 extern ndn::Name signer;
 
 // Global prefix for NDNFS

@@ -45,8 +45,7 @@
 
 #include "config.h"
 
-extern ndn::ptr_lib::shared_ptr<ndn::OSXPrivateKeyStorage> privateStoragePtr;
-extern ndn::ptr_lib::shared_ptr<ndn::KeyChain> keychain;
+extern ndn::KeyChain keychain;
 extern const char *db_name;
 extern sqlite3 *db;
 

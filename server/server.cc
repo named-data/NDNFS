@@ -39,14 +39,15 @@ using namespace ndn;
 const char *db_name = "/tmp/ndnfs.db";
 sqlite3 *db;
 
-// create a global handler
 Name signer("/ndn/edu/ucla/cs/irl/imac");
+
 ptr_lib::shared_ptr<OSXPrivateKeyStorage> privateStoragePtr(new OSXPrivateKeyStorage());
-ptr_lib::shared_ptr<KeyChain> keychain(new KeyChain
-  (ptr_lib::make_shared<IdentityManager>(ptr_lib::make_shared<BasicIdentityStorage>(), privateStoragePtr), 
-   ptr_lib::make_shared<NoVerifyPolicyManager>()));
-ptr_lib::shared_ptr<Transport> ndnTransport(new TcpTransport());
-ptr_lib::shared_ptr<Face> handler(new Face(ndnTransport, ptr_lib::make_shared<TcpTransport::ConnectionInfo>("localhost")));
+ndn::ptr_lib::shared_ptr<ndn::BasicIdentityStorage> identityStoragePtr(new ndn::BasicIdentityStorage());
+KeyChain keychain(
+    ptr_lib::make_shared<IdentityManager>(identityStoragePtr, privateStoragePtr), 
+    ptr_lib::make_shared<NoVerifyPolicyManager>());
+
+Face handler("localhost");
 
 string global_prefix;
 
@@ -82,9 +83,9 @@ int main(int argc, char **argv) {
     global_prefix = InterestBaseName.toUri();
     cout << "global prefix for NDNFS: " << global_prefix << endl;
 
-    handler->registerPrefix(InterestBaseName, ::OnInterest, ::OnRegisterFailed);
+    handler.registerPrefix(InterestBaseName, ::OnInterest, ::OnRegisterFailed);
     while (true) {
-        handler->processEvents();
+        handler.processEvents();
         usleep (10);
     }
 	
