@@ -22,26 +22,19 @@
 #include <ndn-cpp/data.hpp>
 #include <ndn-cpp/interest.hpp>
 #include <ndn-cpp/face.hpp>
-#include <ndn-cpp/security/key-chain.hpp>
-#include <ndn-cpp/security/identity/osx-private-key-storage.hpp>
-#include <ndn-cpp/security/identity/basic-identity-storage.hpp>
-#include <ndn-cpp/security/policy/no-verify-policy-manager.hpp>
 
 #include "dir.pb.h"
 #include "file.pb.h"
 
 #include <iostream>
+#include <getopt.h>
+#include <unistd.h>
 
 using namespace std;
 using namespace ndn;
 //using namespace boost;
 
-ptr_lib::shared_ptr<OSXPrivateKeyStorage> privateStoragePtr(new OSXPrivateKeyStorage());
-ptr_lib::shared_ptr<KeyChain> keychain(new KeyChain
-  (ptr_lib::make_shared<IdentityManager>(ptr_lib::make_shared<BasicIdentityStorage>(), privateStoragePtr), 
-   ptr_lib::make_shared<NoVerifyPolicyManager>()));
-ptr_lib::shared_ptr<Transport> ndnTransport(new TcpTransport());
-ptr_lib::shared_ptr<Face> handler(new Face(ndnTransport, ptr_lib::make_shared<TcpTransport::ConnectionInfo>("localhost")));
+Face handler("localhost");
 
 void onData(const ptr_lib::shared_ptr<const Interest>&, const ptr_lib::shared_ptr<Data>&);
 void onTimeout(const ptr_lib::shared_ptr<const Interest>&);
@@ -124,11 +117,11 @@ int main (int argc, char **argv) {
         }
     }
 
-    handler->expressInterest(*interestPtr, onData, onTimeout);
+    handler.expressInterest(*interestPtr, onData, onTimeout);
     cout << "Interest sent" << endl;
 
     while (!done) {
-        handler->processEvents();
+        handler.processEvents();
         usleep (10000);
     }
 
