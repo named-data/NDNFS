@@ -3,6 +3,11 @@ NDNFS
 
 NDN-friendly file system (based on FUSE)
 
+Update Oct, 2015 (Zhehao)
+-----------------------------
+
+An updated version of the implementation (that works with the ndn-cpp (tested with 0.7)) can be found [here](https://github.com/remap/ndnfs-port). More later.
+
 Compilation on Mac OSX 10.8.3
 -----------------------------
 
